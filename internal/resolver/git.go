@@ -4,6 +4,7 @@ import (
 	"context"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +21,14 @@ const (
 	GitTimeout = 2 * time.Second
 )
 
+// DefaultBranchMaxLength bounds what a branch may contribute to a title.
+//
+// Twelve characters hold a tracker key, or a short word and part of the next,
+// and leave a tab readable beside a dozen others. Real branch names run far
+// past it: the ones this was calibrated against averaged fifty characters and
+// reached ninety.
+const DefaultBranchMaxLength = 12
+
 // defaultBranches name a repository's trunk, which says nothing the directory
 // has not already said: a tab in ~/work/dashboard on main is just "dashboard".
 var defaultBranches = map[string]struct{}{
@@ -27,14 +36,18 @@ var defaultBranches = map[string]struct{}{
 	"master": {},
 }
 
-// branchPrefixes are the conventional namespaces a branch name is filed under.
-// They are the same on every branch in the repository, so they cost characters
-// without distinguishing anything.
-var branchPrefixes = map[string]struct{}{
-	"feature": {}, "features": {}, "feat": {},
-	"bugfix": {}, "bug": {}, "fix": {}, "hotfix": {},
-	"release": {}, "chore": {}, "refactor": {}, "docs": {}, "test": {},
-}
+// trackerKey matches an issue key such as MC-13675 or ABC-42.
+//
+// It is the one part of a branch name that identifies the work, and it survives
+// every naming convention: whether a team writes `feature/MC-13675`,
+// `bugfix-alex-the-thing-mc-13675` or `MC-13675`, the key is in there
+// somewhere. Two to six letters followed by at least two digits keeps it clear
+// of ordinary hyphenated words and of version-like fragments such as `utf-8`.
+var trackerKey = regexp.MustCompile(`(?i)\b[a-z]{2,6}-\d{2,6}\b`)
+
+// branchSeparators are the characters branch names are built out of. Cutting a
+// long branch at one of them ends it on a whole word.
+const branchSeparators = "-_./ "
 
 // Git derives the activity from the branch checked out in the pane's directory.
 //
@@ -49,9 +62,10 @@ var branchPrefixes = map[string]struct{}{
 type Git struct {
 	// lookup reads the branch checked out in a directory. It is a field so
 	// tests can drive every outcome without a repository on disk.
-	lookup  func(ctx context.Context, dir string) (string, bool)
-	ttl     time.Duration
-	timeout time.Duration
+	lookup    func(ctx context.Context, dir string) (string, bool)
+	ttl       time.Duration
+	timeout   time.Duration
+	maxLength int
 
 	mu      sync.Mutex
 	entries map[string]*gitEntry
@@ -66,20 +80,22 @@ type gitEntry struct {
 
 var _ Source = (*Git)(nil)
 
-// NewGit builds the source with the real git executable behind it.
-func NewGit() *Git {
+// NewGit builds the source with the real git executable behind it. A maxLength
+// of zero or less leaves branches out of titles entirely.
+func NewGit(maxLength int) *Git {
 	return &Git{
-		lookup:  gitBranch,
-		ttl:     GitTTL,
-		timeout: GitTimeout,
-		entries: make(map[string]*gitEntry),
+		lookup:    gitBranch,
+		ttl:       GitTTL,
+		timeout:   GitTimeout,
+		maxLength: maxLength,
+		entries:   make(map[string]*gitEntry),
 	}
 }
 
 func (*Git) Name() string { return "git" }
 
 func (g *Git) Resolve(pane *state.PaneState) (Parts, bool) {
-	if pane == nil {
+	if pane == nil || g.maxLength <= 0 {
 		return Parts{}, false
 	}
 
@@ -98,11 +114,8 @@ func (g *Git) Resolve(pane *state.PaneState) (Parts, bool) {
 		return Parts{}, false
 	}
 
-	activity := shortenBranch(Sanitize(branch, 0))
+	activity := shortenBranch(Sanitize(branch, 0), g.maxLength)
 	if activity == "" {
-		return Parts{}, false
-	}
-	if _, isDefault := defaultBranches[strings.ToLower(activity)]; isDefault {
 		return Parts{}, false
 	}
 	return Parts{Activity: activity, Confidence: ConfidenceGit}, true
@@ -171,18 +184,56 @@ func gitBranch(ctx context.Context, dir string) (string, bool) {
 	return branch, true
 }
 
-// shortenBranch drops a conventional namespace from a branch name, so
-// `feature/MC-13200` contributes `MC-13200`.
+// shortenBranch reduces a branch name to the part worth putting in a tab title.
 //
-// Only the leading segment is considered, and only when it is a namespace
-// rather than part of the name: `fix/oauth` shortens, `oauth/fix` does not.
-func shortenBranch(branch string) string {
-	prefix, rest, found := strings.Cut(branch, "/")
-	if !found || rest == "" {
-		return branch
+// Branch conventions vary too much to enumerate, so nothing here is a list of
+// known prefixes — a list only ever fits the team it was written for. Two rules
+// cover every convention seen:
+//
+//   - An issue key wins outright. It identifies the work, it is short, and it
+//     survives whatever the convention wraps around it. A team whose branches
+//     all begin `bugfix-<author>-` gets eight characters that distinguish
+//     instead of eight that do not.
+//   - Otherwise keep the beginning, cut at a separator so the result ends on a
+//     whole word, and drop any namespace the branch is filed under, since every
+//     branch in the repository carries the same one.
+//
+// The trunk contributes nothing either way: a tab in a repository it is already
+// named after learns nothing from being told it is on main.
+func shortenBranch(branch string, maxLength int) string {
+	branch = strings.Trim(branch, branchSeparators)
+	if branch == "" || maxLength <= 0 {
+		return ""
 	}
-	if _, isPrefix := branchPrefixes[strings.ToLower(prefix)]; !isPrefix {
-		return branch
+	if _, isDefault := defaultBranches[strings.ToLower(branch)]; isDefault {
+		return ""
 	}
-	return rest
+
+	if key := trackerKey.FindString(branch); key != "" {
+		return strings.ToUpper(key)
+	}
+
+	if cut := strings.LastIndex(branch, "/"); cut >= 0 && cut+1 < len(branch) {
+		branch = branch[cut+1:]
+	}
+	return cutAtSeparator(branch, maxLength)
+}
+
+// cutAtSeparator shortens a value to maxLength, ending on the last separator
+// that fits so the result is a whole word rather than a fragment.
+func cutAtSeparator(value string, maxLength int) string {
+	runes := []rune(value)
+	if len(runes) <= maxLength {
+		return strings.Trim(value, branchSeparators)
+	}
+
+	head := string(runes[:maxLength])
+	// When the character that did not fit is itself a separator, the head
+	// already ends on a whole word and cutting again would throw one away.
+	if !strings.ContainsRune(branchSeparators, runes[maxLength]) {
+		if cut := strings.LastIndexAny(head, branchSeparators); cut > 0 {
+			head = head[:cut]
+		}
+	}
+	return strings.Trim(head, branchSeparators)
 }

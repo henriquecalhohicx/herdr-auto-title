@@ -79,11 +79,13 @@ func New(maxLength int, sources ...Source) *Deterministic {
 // Default builds the resolver Auto Title ships with: every source in priority
 // order, highest first. Later tickets add their sources here, so the binary and
 // the tests can never drift apart on what the chain contains.
-func Default(maxLength int) *Deterministic {
+//
+// branchMax bounds what a git branch may contribute; zero leaves branches out.
+func Default(maxLength, branchMax int) *Deterministic {
 	return New(maxLength,
 		Agent{},
 		TerminalTitle{},
-		NewGit(),
+		NewGit(branchMax),
 		NewCWD(),
 		AgentName{},
 	)

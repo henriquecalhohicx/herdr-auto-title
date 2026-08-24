@@ -18,9 +18,10 @@ import (
 // reachable without a repository on disk.
 func stubGit(branches map[string]string) *Git {
 	g := &Git{
-		ttl:     GitTTL,
-		timeout: GitTimeout,
-		entries: make(map[string]*gitEntry),
+		ttl:       GitTTL,
+		timeout:   GitTimeout,
+		maxLength: DefaultBranchMaxLength,
+		entries:   make(map[string]*gitEntry),
 	}
 	g.lookup = func(_ context.Context, dir string) (string, bool) {
 		branch, ok := branches[dir]
@@ -110,7 +111,7 @@ func TestTheFirstResolveDoesNotWaitForGit(t *testing.T) {
 }
 
 func TestDefaultBranchesAddNothing(t *testing.T) {
-	for _, branch := range []string{"main", "master", "Main"} {
+	for _, branch := range []string{"main", "master", "Main", "MASTER"} {
 		t.Run(branch, func(t *testing.T) {
 			g := stubGit(map[string]string{"/Users/dev/work/dashboard": branch})
 			pane := &state.PaneState{CWD: "/Users/dev/work/dashboard"}
@@ -123,24 +124,68 @@ func TestDefaultBranchesAddNothing(t *testing.T) {
 	}
 }
 
-func TestConventionalPrefixesAreDropped(t *testing.T) {
+func TestBranchesAreReducedToWhatIdentifiesThem(t *testing.T) {
+	// The first block is taken verbatim from a repository this was calibrated
+	// against: no slashes anywhere, every branch prefixed the same way, and the
+	// issue key in a different place each time. A rule built on known prefixes
+	// or on the first N characters returns "bugfix-asa" for all of them.
 	cases := map[string]string{
-		"feature/MC-13200":    "MC-13200",
-		"bugfix/oauth-scopes": "oauth-scopes",
-		"fix/oauth":           "oauth",
-		"HOTFIX/urgent":       "urgent",
-		"release/2.0":         "2.0",
-		// Not a namespace, so nothing is dropped.
-		"oauth/fix":  "oauth/fix",
-		"MC-13200":   "MC-13200",
-		"feature/":   "feature/",
-		"feature":    "feature",
-		"a/b/c":      "a/b/c",
-		"feat/a/b/c": "a/b/c",
+		"bugfix-asatretdinov-cpanel-uapi-body-arguments-mc-13675":     "MC-13675",
+		"bugfix-MC-12722-sql-injection-operations-summary":            "MC-12722",
+		"bugfix-dmodin-MC-13618":                                      "MC-13618",
+		"bugfix-nchebotarev-early_access_bar_breaks_scroll-MC-13590":  "MC-13590",
+		"bugfix-mboiko-MC-4911-show-clear-error-message-for-wp-agent": "MC-4911",
+
+		// Other conventions reach the same key.
+		"feature/MC-13200": "MC-13200",
+		"MC-13200":         "MC-13200",
+		"mc-13200":         "MC-13200",
+
+		// No key: keep the beginning, ending on a whole word.
+		"refactor-the-poller":         "refactor-the",
+		"drop_the_event_stream":       "drop_the",
+		"short":                       "short",
+		"exactly-12ch":                "exactly-12ch",
+		"averyveryverylongsingleword": "averyveryver",
+
+		// A namespace applies to every branch in the repository.
+		"feature/oauth":     "oauth",
+		"alex/oauth-scopes": "oauth-scopes",
+		"a/b/oauth":         "oauth",
+
+		// Version-like fragments are not issue keys.
+		"fix-utf-8-encoding": "fix-utf-8",
+		"http-2-support":     "http-2",
 	}
 	for branch, want := range cases {
-		if got := shortenBranch(branch); got != want {
+		if got := shortenBranch(branch, DefaultBranchMaxLength); got != want {
 			t.Errorf("shortenBranch(%q) = %q, want %q", branch, got, want)
+		}
+	}
+}
+
+func TestNoBranchIsShownWhenTheLimitIsZero(t *testing.T) {
+	// The way to turn branches off entirely.
+	g := stubGit(map[string]string{"/Users/dev/work/dashboard": "MC-13200"})
+	g.maxLength = 0
+	pane := &state.PaneState{CWD: "/Users/dev/work/dashboard"}
+
+	if _, ok := g.Resolve(pane); ok {
+		t.Error("a branch was contributed with the limit at zero")
+	}
+	g.mu.Lock()
+	started := len(g.entries)
+	g.mu.Unlock()
+	if started != 0 {
+		t.Error("a lookup was started even though branches are off")
+	}
+}
+
+func TestTheLimitBoundsWhatABranchAdds(t *testing.T) {
+	for _, limit := range []int{4, 8, 12, 40} {
+		got := shortenBranch("refactor-the-whole-poller", limit)
+		if len([]rune(got)) > limit {
+			t.Errorf("limit %d produced %q, %d runes", limit, got, len([]rune(got)))
 		}
 	}
 }
@@ -374,7 +419,7 @@ func TestTheShippedChainPutsTheBranchAfterTheDirectory(t *testing.T) {
 	repo := newRepo(t)
 	run(t, repo, "checkout", "-b", "feature/MC-13200")
 
-	chain := Default(DefaultMaxLength)
+	chain := Default(DefaultMaxLength, DefaultBranchMaxLength)
 	tab := tabWithPane(&state.PaneState{CWD: repo})
 	want := filepath.Base(repo) + " · MC-13200"
 
@@ -398,7 +443,7 @@ func TestAMeaningfulTerminalTitleOutranksTheBranch(t *testing.T) {
 	repo := newRepo(t)
 	run(t, repo, "checkout", "-b", "feature/MC-13200")
 
-	chain := Default(DefaultMaxLength)
+	chain := Default(DefaultMaxLength, DefaultBranchMaxLength)
 	tab := tabWithPane(&state.PaneState{CWD: repo, TerminalTitle: "Fix OAuth redirect"})
 
 	// Give the branch every chance to arrive before asserting it lost.

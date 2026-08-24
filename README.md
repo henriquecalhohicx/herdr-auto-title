@@ -133,10 +133,29 @@ field when an agent does set it; in practice most agent context arrives one rung
 lower, through the terminal title.
 
 Inside a repository the branch becomes the activity, so a tab reads
-`dashboard · MC-13200`. `main` and `master` are dropped: a tab on the trunk of
-the repository it is named after learns nothing from being told so. Conventional
-namespaces go too — `feature/MC-13200` contributes `MC-13200` — because every
-branch in the repository carries the same one.
+`dashboard · MC-13200`. Branch names are far too long to use whole — the ones
+this was calibrated against averaged fifty characters — and branch conventions
+vary too much to enumerate, so two rules reduce any of them:
+
+| Branch | Contributes |
+|--------|-------------|
+| `bugfix-asatretdinov-cpanel-uapi-body-arguments-mc-13675` | `MC-13675` |
+| `bugfix-MC-12722-sql-injection-operations-summary` | `MC-12722` |
+| `feature/MC-13200` | `MC-13200` |
+| `refactor-the-poller` | `refactor-the` |
+| `alex/oauth-scopes` | `oauth-scopes` |
+| `main`, `master` | nothing |
+
+**An issue key wins outright.** It identifies the work, it is short, and it
+survives whatever a convention wraps around it — a team whose branches all begin
+`bugfix-<author>-` gets eight characters that distinguish rather than eight that
+do not. **Otherwise the beginning is kept and cut at a separator**, so the result
+ends on a whole word, and any namespace is dropped since every branch in the
+repository carries the same one. The trunk contributes nothing: a tab in a
+repository it is already named after learns nothing from being told it is on
+`main`.
+
+Set `HERDR_AUTO_TITLE_BRANCH_MAX=0` to leave branches out of titles entirely.
 
 The lookup never runs in the poll loop. Each poll answers from a cache and
 starts a background refresh when its reading is missing or older than three
@@ -173,6 +192,7 @@ an unusable value is logged as a warning and the default is kept.
 | `HERDR_AUTO_TITLE_DEBUG` | `false` | Log at DEBUG instead of INFO |
 | `HERDR_AUTO_TITLE_POLL_MS` | `500` | How often the session is read; also the fastest a tab can be renamed |
 | `HERDR_AUTO_TITLE_MAX_LENGTH` | `64` | Maximum title length in characters |
+| `HERDR_AUTO_TITLE_BRANCH_MAX` | `12` | Most a git branch may add to a title; `0` leaves branches out |
 
 Auto Title logs to stderr through `log/slog`. Raw terminal output and command
 arguments are never logged.

@@ -15,7 +15,7 @@ import (
 const testPoll = 10 * time.Millisecond
 
 func testConfig() Config {
-	return Config{Poll: testPoll, MaxLength: resolver.DefaultMaxLength}
+	return Config{Poll: testPoll, MaxLength: resolver.DefaultMaxLength, BranchMax: resolver.DefaultBranchMaxLength}
 }
 
 func discardLogger() *slog.Logger {
@@ -37,7 +37,7 @@ func start(t *testing.T, tabs []herdr.TabInfo, panes []herdr.PaneInfo) *harness 
 	t.Helper()
 
 	client := herdr.NewStub(tabs, panes)
-	app := New(testConfig(), discardLogger(), resolver.Default(resolver.DefaultMaxLength))
+	app := New(testConfig(), discardLogger(), resolver.Default(resolver.DefaultMaxLength, resolver.DefaultBranchMaxLength))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	h := &harness{t: t, client: client, done: make(chan error, 1), cancel: cancel}
@@ -249,7 +249,7 @@ func TestAnUnreachableSocketStopsTheRun(t *testing.T) {
 	client := herdr.NewStub(nil, nil)
 	client.SetCallError(errors.New("no such socket"))
 
-	app := New(testConfig(), discardLogger(), resolver.Default(resolver.DefaultMaxLength))
+	app := New(testConfig(), discardLogger(), resolver.Default(resolver.DefaultMaxLength, resolver.DefaultBranchMaxLength))
 	if err := app.Run(context.Background(), client); err == nil {
 		t.Error("Run succeeded despite an unreachable socket")
 	}

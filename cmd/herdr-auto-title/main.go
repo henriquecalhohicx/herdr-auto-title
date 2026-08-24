@@ -49,7 +49,7 @@ func run() error {
 		return err
 	}
 
-	titles := resolver.Default(cfg.MaxLength)
+	titles := resolver.Default(cfg.MaxLength, cfg.BranchMax)
 
 	if err := app.New(cfg, log, titles).Run(ctx, client); err != nil {
 		if errors.Is(err, context.Canceled) {

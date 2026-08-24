@@ -14,6 +14,7 @@ const (
 	EnvDebug     = "HERDR_AUTO_TITLE_DEBUG"
 	EnvPoll      = "HERDR_AUTO_TITLE_POLL_MS"
 	EnvMaxLength = "HERDR_AUTO_TITLE_MAX_LENGTH"
+	EnvBranchMax = "HERDR_AUTO_TITLE_BRANCH_MAX"
 )
 
 // DefaultPoll is how often the session is read.
@@ -28,6 +29,9 @@ type Config struct {
 	Debug     bool
 	Poll      time.Duration
 	MaxLength int
+	// BranchMax bounds what a git branch may add to a title. Zero leaves
+	// branches out of titles entirely.
+	BranchMax int
 }
 
 // LoadConfig reads configuration from the environment. Unusable values are
@@ -37,6 +41,7 @@ func LoadConfig() (Config, []string) {
 	cfg := Config{
 		Poll:      DefaultPoll,
 		MaxLength: resolver.DefaultMaxLength,
+		BranchMax: resolver.DefaultBranchMaxLength,
 	}
 	var warnings []string
 
@@ -70,6 +75,19 @@ func LoadConfig() (Config, []string) {
 			warnings = append(warnings, fmt.Sprintf("%s=%d must be positive, using %d", EnvMaxLength, length, cfg.MaxLength))
 		default:
 			cfg.MaxLength = length
+		}
+	}
+
+	if raw := os.Getenv(EnvBranchMax); raw != "" {
+		length, err := strconv.Atoi(raw)
+		switch {
+		case err != nil:
+			warnings = append(warnings, fmt.Sprintf("%s=%q is not a number, using %d", EnvBranchMax, raw, cfg.BranchMax))
+		case length < 0:
+			warnings = append(warnings, fmt.Sprintf("%s=%d cannot be negative, using %d", EnvBranchMax, length, cfg.BranchMax))
+		default:
+			// Zero is meaningful: it leaves branches out of titles.
+			cfg.BranchMax = length
 		}
 	}
 

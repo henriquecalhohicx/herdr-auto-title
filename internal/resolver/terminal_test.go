@@ -21,7 +21,7 @@ func tabWithPane(pane *state.PaneState) state.TabState {
 
 // titleResolver is the shipped chain: terminal title over the working directory.
 func titleResolver(maxLength int) *Deterministic {
-	return Default(maxLength)
+	return Default(maxLength, DefaultBranchMaxLength)
 }
 
 func TestTerminalTitleBeatsTheWorkingDirectory(t *testing.T) {
