@@ -19,6 +19,7 @@ type StubClient struct {
 	mu        sync.Mutex
 	tabs      map[string]TabInfo
 	panes     map[string]PaneInfo
+	processes map[string][]PaneProcessInfoProcess
 	renames   []RenameCall
 	renameErr error
 	callErr   error
@@ -30,8 +31,9 @@ var _ Client = (*StubClient)(nil)
 // NewStub returns a client describing the given session.
 func NewStub(tabs []TabInfo, panes []PaneInfo) *StubClient {
 	s := &StubClient{
-		tabs:  make(map[string]TabInfo, len(tabs)),
-		panes: make(map[string]PaneInfo, len(panes)),
+		tabs:      make(map[string]TabInfo, len(tabs)),
+		panes:     make(map[string]PaneInfo, len(panes)),
+		processes: make(map[string][]PaneProcessInfoProcess),
 	}
 	for _, tab := range tabs {
 		s.tabs[tab.TabID] = tab
@@ -47,6 +49,13 @@ func (s *StubClient) SetTab(tab TabInfo) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.tabs[tab.TabID] = tab
+}
+
+// SetProcesses sets what a read of this pane's processes will answer.
+func (s *StubClient) SetProcesses(paneID string, processes ...PaneProcessInfoProcess) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.processes[paneID] = processes
 }
 
 // SetPane adds or replaces a pane.
@@ -119,6 +128,21 @@ func (s *StubClient) Call(ctx context.Context, method string, params any, result
 			Tabs:  sorted(s.tabs, func(t TabInfo) string { return t.TabID }),
 			Panes: sorted(s.panes, func(p PaneInfo) string { return p.PaneID }),
 		}
+		return nil
+
+	case MethodPaneProcessInfo:
+		target, ok := params.(PaneTarget)
+		if !ok {
+			return fmt.Errorf("stub client: unexpected params for %s", method)
+		}
+		if _, ok := s.panes[target.PaneID]; !ok {
+			return &APIError{Code: CodePaneNotFound, Message: "pane " + target.PaneID + " not found"}
+		}
+		res, ok := result.(*processInfoResult)
+		if !ok {
+			return fmt.Errorf("stub client: unexpected result type for %s", method)
+		}
+		res.ProcessInfo.ForegroundProcesses = s.processes[target.PaneID]
 		return nil
 
 	case MethodTabRename:

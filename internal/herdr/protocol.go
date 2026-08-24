@@ -44,6 +44,9 @@ const (
 	// CodeTabNotFound is returned when a tab closed between the snapshot that
 	// named it and the rename that followed.
 	CodeTabNotFound = "tab_not_found"
+	// CodePaneNotFound is the same for a pane, which can close between the
+	// snapshot that listed it and the read of what is running in it.
+	CodePaneNotFound = "pane_not_found"
 )
 
 // ErrorCode returns the Herdr error code carried by err, or "" if err is not a
@@ -56,12 +59,17 @@ func ErrorCode(err error) string {
 	return ""
 }
 
-// Method names used by Auto Title. There are only two: one to read the session
-// and one to act on it.
+// Method names used by Auto Title: two to read the session and one to act on it.
 const (
 	MethodSessionSnapshot = "session.snapshot"
+	MethodPaneProcessInfo = "pane.process_info"
 	MethodTabRename       = "tab.rename"
 )
+
+// PaneTarget names the pane a request applies to.
+type PaneTarget struct {
+	PaneID string `json:"pane_id"`
+}
 
 // TabRenameParams are the parameters of tab.rename.
 type TabRenameParams struct {

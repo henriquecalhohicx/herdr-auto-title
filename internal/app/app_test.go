@@ -304,3 +304,54 @@ func TestAgentContextNamesTheTab(t *testing.T) {
 		t.Errorf("rename = %q, want %q", h.awaitRenames(1)[0].Label, want)
 	}
 }
+
+func TestARemoteSessionIsNamedAfterItsHost(t *testing.T) {
+	// What is running in a pane is not in the snapshot, so this exercises the
+	// extra read the poll makes for every pane.
+	h := start(t,
+		[]herdr.TabInfo{{TabID: "wE:t1", Label: "1"}},
+		[]herdr.PaneInfo{{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true}},
+	)
+	h.awaitRenames(1)
+
+	h.client.SetProcesses("wE:p1",
+		herdr.PaneProcessInfoProcess{Name: "fish", Argv: []string{"-fish"}},
+		herdr.PaneProcessInfoProcess{Name: "ssh", Argv: []string{"ssh", "-p", "2222", "deploy@prod-01"}},
+	)
+
+	renames := h.awaitRenames(2)
+	if want := "prod-01 · SSH"; renames[1].Label != want {
+		t.Errorf("rename = %q, want %q", renames[1].Label, want)
+	}
+}
+
+func TestAPaneWhoseProcessesCannotBeReadIsStillNamed(t *testing.T) {
+	// The pane closed between the snapshot listing it and the read of what it
+	// is running; the snapshot's own context still names the tab.
+	client := herdr.NewStub(
+		[]herdr.TabInfo{{TabID: "wE:t1", Label: "1"}},
+		[]herdr.PaneInfo{{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true}},
+	)
+
+	app := New(testConfig(), discardLogger(), resolver.Default(resolver.DefaultMaxLength, resolver.DefaultBranchMaxLength))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- app.Run(ctx, client) }()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if renames := client.Renames(); len(renames) > 0 {
+			if renames[0].Label != "dashboard" {
+				t.Errorf("rename = %q, want dashboard", renames[0].Label)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the tab was never named")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+	<-done
+}

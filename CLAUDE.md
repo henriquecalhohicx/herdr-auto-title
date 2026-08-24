@@ -88,7 +88,10 @@ listed here** (`make probe-*`, `scripts/probe.py`).
   pane observed; that agent reports its topic through `terminal_title_stripped`.
 - `agent_status` is `idle | working | blocked | done | unknown`; a pane with no
   agent reports `unknown`.
-- `PaneInfo` carries no foreground process name; that needs `pane.process_info`.
+- `PaneInfo` carries no foreground process name; that needs `pane.process_info`,
+  one request per pane at 0.11 ms — cheaper than the snapshot. Its
+  `foreground_processes` lists the pane's foreground process *and its
+  descendants*, each with `name` and a nullable `argv`.
 - Pane revisions are monotonic, which is how a poll tells which panes moved.
 - `tab.get` and `pane.get` read one object each; `pane.list` filters by
   workspace only, not by tab. Neither is needed while the snapshot is one call.

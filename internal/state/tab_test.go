@@ -64,7 +64,7 @@ func TestPaneFromReadsAgentContext(t *testing.T) {
 		Agent:                 "claude",
 		DisplayAgent:          "Claude Code",
 		AgentStatus:           herdr.AgentStatusWorking,
-	}, stamp)
+	}, nil, stamp)
 
 	switch {
 	case pane.TerminalTitle != "Claude Code":
@@ -81,7 +81,7 @@ func TestPaneFromReadsAgentContext(t *testing.T) {
 }
 
 func TestPaneWithoutAnAgent(t *testing.T) {
-	pane := PaneFrom(herdr.PaneInfo{PaneID: "wE:p1", AgentStatus: herdr.AgentStatusUnknown}, time.Now())
+	pane := PaneFrom(herdr.PaneInfo{PaneID: "wE:p1", AgentStatus: herdr.AgentStatusUnknown}, nil, time.Now())
 	if pane.HasAgent() || pane.AgentIsActive() {
 		t.Errorf("pane %+v reported an agent", pane)
 	}

@@ -44,6 +44,22 @@ type PaneInfo struct {
 	AgentStatus  string `json:"agent_status"`
 }
 
+// PaneProcessInfoProcess is one process running in a pane. Herdr reports more
+// about each — its pid, its working directory, the joined command line — but a
+// title is derived from the name and the arguments alone.
+type PaneProcessInfoProcess struct {
+	Name string   `json:"name"`
+	Argv []string `json:"argv"`
+}
+
+// PaneProcessInfo is what pane.process_info answers.
+//
+// ForegroundProcesses holds the pane's foreground process and its descendants,
+// so a pane running an editor that shelled out lists both.
+type PaneProcessInfo struct {
+	ForegroundProcesses []PaneProcessInfoProcess `json:"foreground_processes"`
+}
+
 // Snapshot is the whole session as session.snapshot reports it.
 type Snapshot struct {
 	Tabs     []TabInfo  `json:"tabs"`
@@ -55,4 +71,9 @@ type Snapshot struct {
 // snapshotResult wraps the snapshot in the method's result object.
 type snapshotResult struct {
 	Snapshot Snapshot `json:"snapshot"`
+}
+
+// processInfoResult wraps what pane.process_info answers.
+type processInfoResult struct {
+	ProcessInfo PaneProcessInfo `json:"process_info"`
 }

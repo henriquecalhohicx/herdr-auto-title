@@ -103,7 +103,7 @@ one.
 | 2 | Meaningful agent title | **implemented** |
 | 3 | Meaningful terminal title | **implemented** |
 | 4 | Known foreground process | later slice |
-| 5 | SSH session | later slice |
+| 5 | SSH session | **implemented** |
 | 6 | Git context | **implemented** |
 | 7 | Working directory | **implemented** |
 | 8 | Agent name | **implemented** |
@@ -131,6 +131,14 @@ was null for every Claude Code pane observed — and the agent expresses what it
 working on through the terminal title instead. The agent source is what reads the
 field when an agent does set it; in practice most agent context arrives one rung
 lower, through the terminal title.
+
+A pane running `ssh` is named after the machine it reached, not the directory it
+was launched from: `prod-01 · SSH`. The host is the context, so a title the
+remote shell sets still fits beside it. The user is dropped — `root@prod-01` and
+`deploy@prod-01` are the same machine, and a tab bar has no room to say who is
+logged in. Options are parsed rather than guessed at, so `ssh -p 2222 prod-01`
+and `ssh prod-01 tail -f /var/log/syslog` both yield `prod-01`; a destination
+that cannot be read still marks the tab as remote.
 
 Inside a repository the branch becomes the activity, so a tab reads
 `dashboard · MC-13200`. Branch names are far too long to use whole — the ones
@@ -282,7 +290,10 @@ Verified against Herdr 0.8.2, protocol 20:
 - `pane_closed` and `pane_agent_detected` carry only pane identifiers — neither
   names the tab.
 - `PaneInfo` does **not** include the foreground process name; that requires the
-  separate `pane.process_info` method.
+  separate `pane.process_info` method, which is asked per pane and measured at
+  0.11 ms — less than the snapshot itself. Its `foreground_processes` holds the
+  pane's foreground process *and that process's descendants*, each with `name`
+  and a nullable `argv`.
 - `PaneInfo.title` is the agent's own title, and Herdr left it null for every
   Claude Code pane observed; that agent reports its topic through
   `terminal_title_stripped` instead.

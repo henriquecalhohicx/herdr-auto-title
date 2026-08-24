@@ -83,7 +83,7 @@ func (a *App) poll(ctx context.Context, client herdr.Client) error {
 	}
 	a.changes.Observe(snapshot.Panes)
 
-	for _, tab := range a.tabsIn(snapshot) {
+	for _, tab := range a.tabsIn(ctx, client, snapshot) {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -115,13 +115,21 @@ func (a *App) poll(ctx context.Context, client herdr.Client) error {
 	return nil
 }
 
-// tabsIn assembles the snapshot's tabs, each with the panes it holds. The
-// snapshot already carries every pane's context, so this costs no further
-// requests.
-func (a *App) tabsIn(snapshot herdr.Snapshot) []state.TabState {
+// tabsIn assembles the snapshot's tabs, each with the panes it holds.
+//
+// The snapshot carries everything about a pane except what is running in it,
+// which needs a request of its own. That request measured 0.11 ms — less than
+// the snapshot that preceded it — so it is made for every pane rather than
+// guessed at, and a pane whose processes cannot be read simply has none.
+func (a *App) tabsIn(ctx context.Context, client herdr.Client, snapshot herdr.Snapshot) []state.TabState {
 	byTab := make(map[string][]*state.PaneState, len(snapshot.Tabs))
 	for _, pane := range snapshot.Panes {
-		byTab[pane.TabID] = append(byTab[pane.TabID], state.PaneFrom(pane, a.changes.ChangedAt(pane.PaneID)))
+		processes, err := herdr.PaneProcesses(ctx, client, pane.PaneID)
+		if err != nil && herdr.ErrorCode(err) != herdr.CodePaneNotFound && ctx.Err() == nil {
+			a.log.Debug("could not read what a pane is running", "pane_id", pane.PaneID, "error", err)
+		}
+		byTab[pane.TabID] = append(byTab[pane.TabID],
+			state.PaneFrom(pane, processes, a.changes.ChangedAt(pane.PaneID)))
 	}
 
 	tabs := make([]state.TabState, 0, len(snapshot.Tabs))

@@ -33,6 +33,10 @@ type PaneState struct {
 	AgentTitle   string
 	AgentStatus  string
 
+	// Processes are the commands running in the pane, as Herdr reports them:
+	// its foreground process and that process's descendants.
+	Processes []Process
+
 	Focused bool
 	// ChangedAt is when a poll last saw this pane's revision advance. Snapshots
 	// carry no timestamp, so this is the only ordering available when a tab
@@ -40,8 +44,15 @@ type PaneState struct {
 	ChangedAt time.Time
 }
 
+// Process is one command running in a pane. Args is its whole argument vector,
+// program name included, and may be empty when Herdr could not read it.
+type Process struct {
+	Name string
+	Args []string
+}
+
 // PaneFrom builds pane context from what a read returned.
-func PaneFrom(info herdr.PaneInfo, changedAt time.Time) *PaneState {
+func PaneFrom(info herdr.PaneInfo, processes []herdr.PaneProcessInfoProcess, changedAt time.Time) *PaneState {
 	return &PaneState{
 		ID:               info.PaneID,
 		CWD:              info.CWD,
@@ -52,9 +63,21 @@ func PaneFrom(info herdr.PaneInfo, changedAt time.Time) *PaneState {
 		DisplayAgent:     info.DisplayAgent,
 		AgentTitle:       info.Title,
 		AgentStatus:      info.AgentStatus,
+		Processes:        processesFrom(processes),
 		Focused:          info.Focused,
 		ChangedAt:        changedAt,
 	}
+}
+
+func processesFrom(processes []herdr.PaneProcessInfoProcess) []Process {
+	if len(processes) == 0 {
+		return nil
+	}
+	out := make([]Process, 0, len(processes))
+	for _, p := range processes {
+		out = append(out, Process{Name: p.Name, Args: p.Argv})
+	}
+	return out
 }
 
 // HasAgent reports whether Herdr recognizes an agent in the pane.
