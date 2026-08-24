@@ -10,7 +10,7 @@ The plugin must:
 
 - run as a persistent Herdr plugin process;
 - read the Herdr session through the Herdr socket API;
-- maintain an in-memory state cache;
+- read the whole session on each poll and keep almost nothing between them;
 - rename only when the title it derives differs from the tab's current label;
 - determine useful tab titles using a deterministic resolver;
 - rename tabs through the Herdr socket API or Herdr CLI;
@@ -184,19 +184,21 @@ herdr-auto-title/
 │   │   ├── protocol.go
 │   │   └── session.go
 │   ├── state/
-│   │   ├── cache.go
+│   │   ├── changes.go
 │   │   └── tab.go
 │   ├── resolver/
 │   │   ├── resolver.go
-│   │   ├── agents.go
+│   │   ├── agent.go
+│   │   ├── agentname.go
 │   │   ├── terminal.go
 │   │   ├── processes.go
 │   │   ├── ssh.go
 │   │   ├── git.go
 │   │   └── cwd.go
-│   └── state/
-│       └── manager.go
-└── tests/
+│   └── app/
+│       ├── app.go
+│       └── config.go
+└── scripts/
 ```
 
 The exact package layout may be adjusted, but responsibilities must remain separated.
@@ -1188,9 +1190,9 @@ The implementation is complete when:
 - [ ] plugin starts through a Herdr startup hook;
 - [ ] plugin maintains a persistent process;
 - [ ] plugin connects to the Herdr socket;
-- [ ] plugin uses `session.snapshot` for bootstrap;
+- [ ] plugin reads the session with `session.snapshot`;
 - [ ] plugin polls `session.snapshot` on an interval;
-- [ ] plugin maintains an in-memory state cache;
+- [ ] plugin decides from freshly read state, not from remembered state;
 - [ ] plugin supports multiple tabs independently;
 - [ ] a tab renames at most once per poll;
 - [ ] plugin avoids duplicate rename calls;

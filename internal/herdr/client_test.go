@@ -131,7 +131,7 @@ func TestCallDecodesResult(t *testing.T) {
 	var got struct {
 		Version string `json:"version"`
 	}
-	if err := srv.client().Call(context.Background(), MethodPing, nil, &got); err != nil {
+	if err := srv.client().Call(context.Background(), MethodSessionSnapshot, nil, &got); err != nil {
 		t.Fatalf("Call: %v", err)
 	}
 	if got.Version != "0.8.2" {
@@ -139,7 +139,7 @@ func TestCallDecodesResult(t *testing.T) {
 	}
 
 	seen := srv.seen()
-	if len(seen) != 1 || seen[0].Method != MethodPing {
+	if len(seen) != 1 || seen[0].Method != MethodSessionSnapshot {
 		t.Fatalf("server saw %+v, want one ping", seen)
 	}
 	// Herdr requires params on every request.
@@ -155,7 +155,7 @@ func TestEachCallUsesItsOwnConnection(t *testing.T) {
 	// Herdr closes the connection after answering, so a reused connection would
 	// fail on the second call.
 	for i := 0; i < 3; i++ {
-		if err := client.Call(context.Background(), MethodPing, nil, nil); err != nil {
+		if err := client.Call(context.Background(), MethodSessionSnapshot, nil, nil); err != nil {
 			t.Fatalf("call %d: %v", i, err)
 		}
 	}

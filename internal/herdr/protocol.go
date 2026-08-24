@@ -41,7 +41,8 @@ func (e *APIError) Error() string {
 
 // Error codes Auto Title reacts to.
 const (
-	// CodeTabNotFound is returned when a tab has closed since it was cached.
+	// CodeTabNotFound is returned when a tab closed between the snapshot that
+	// named it and the rename that followed.
 	CodeTabNotFound = "tab_not_found"
 )
 
@@ -55,9 +56,9 @@ func ErrorCode(err error) string {
 	return ""
 }
 
-// Method names used by Auto Title.
+// Method names used by Auto Title. There are only two: one to read the session
+// and one to act on it.
 const (
-	MethodPing            = "ping"
 	MethodSessionSnapshot = "session.snapshot"
 	MethodTabRename       = "tab.rename"
 )

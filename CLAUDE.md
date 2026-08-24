@@ -51,9 +51,7 @@ make ps         # show running plugin/watcher instances
 make stop       # stop them
 make tabs       # current tab names
 make watch-tabs # ...refreshed every second
-make probe-subs # subscription types Herdr actually accepts
-make probe-events   # the live event stream
-make probe-snapshot # the bootstrap snapshot
+make probe-snapshot # the session snapshot the plugin polls
 ```
 
 `go test -race` is the gate, not `go test`: the poll loop and the change history

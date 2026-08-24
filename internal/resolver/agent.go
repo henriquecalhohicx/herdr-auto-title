@@ -16,7 +16,7 @@ import (
 // Many agents report no title at all and express the same thing through the
 // terminal title instead; those panes fall through to TerminalTitle, which is
 // the next source down. Nothing here reads an agent's transcript or asks
-// anything over the network — the input is what Herdr's events already carry.
+// anything over the network — the input is what Herdr's snapshot already carries.
 type Agent struct{}
 
 var _ Source = Agent{}

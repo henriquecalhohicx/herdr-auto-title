@@ -113,15 +113,12 @@ func withContextErr(ctx context.Context, err error) error {
 	return err
 }
 
-// SessionSnapshot fetches the whole session: every tab, every pane, and the
-// context each pane carries.
+// SessionSnapshot fetches the whole session: every tab with its label, and every
+// pane with the context it carries.
 //
-// This is Auto Title's only source of truth. Herdr does expose an event stream,
-// but subscribing replays a backlog before delivering anything live — roughly
-// the last hundred revisions of every pane, about ten a second — and offers no
-// cursor to skip it, so a subscriber spends its first seconds reacting to
-// history. A snapshot always describes the present and costs one request
-// whatever the session holds.
+// This is Auto Title's only source of truth, and there is deliberately no
+// Subscribe beside it. The reason is measured, and it is written down on the
+// poll loop in package app.
 func SessionSnapshot(ctx context.Context, c Client) (Snapshot, error) {
 	var res snapshotResult
 	if err := c.Call(ctx, MethodSessionSnapshot, emptyParams{}, &res); err != nil {

@@ -71,29 +71,22 @@ in another tab will rebuild and restart on it.
 ### 3. Protocol probe — when you are about to assume something
 
 ```sh
-make probe-subs      # subscription types Herdr accepts (diagnostic)
-make probe-events    # Herdr's event stream (diagnostic; the plugin does not use it)
-make probe-snapshot  # the snapshot Auto Title bootstraps from
+make probe-snapshot  # the snapshot the plugin polls
 ```
 
 `scripts/probe.py` talks to the socket directly, so it shows you the wire truth
 rather than what this repo believes. Reach for it **before** writing code that
 reads a new field or calls a new method.
 
-This is not optional caution. The specification this project was planned from got
-three protocol details wrong, each of which would have cost an afternoon of
-debugging:
-
-- the socket serves **one request per connection**, and any request sent on a
-  subscription connection would end the stream;
-- subscription types are dot-separated (`pane.updated`) while the events they
-  deliver arrive snake_case (`pane_updated`);
-- `pane.output_changed` is a real event kind but is **not** an accepted
-  subscription type, and `pane.agent_status_changed`, `pane.scroll_changed` and
-  `pane.output_matched` can only be subscribed per pane.
+This is not optional caution. The specification this project was planned from was
+wrong about the socket in ways that each cost an afternoon: it serves **one
+request per connection**, `PaneInfo` carries no process name, and — the one that
+reshaped the design — subscribing to events replays about ten seconds of history
+per active pane before anything live.
 
 The current list of verified facts lives in the README under *Notes on the Herdr
-socket API*. When a probe teaches you something new, add it there.
+socket API*, and the measurements behind the polling decision are in CLAUDE.md.
+When a probe teaches you something new, add it there.
 
 ## Working through a ticket
 

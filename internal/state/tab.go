@@ -81,7 +81,7 @@ func (p *PaneState) AgentIsActive() bool {
 type TabState struct {
 	ID string
 	// CurrentName is the label the tab carries right now, which is what lets
-	// reconciliation skip a rename that would change nothing.
+	// a poll skip a rename that would change nothing.
 	CurrentName string
 	Panes       map[string]*PaneState
 }

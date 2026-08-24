@@ -1,4 +1,4 @@
-// Package resolver turns cached tab state into a tab title.
+// Package resolver turns a tab's read state into a tab title.
 //
 // Resolution is deterministic: identical state always yields an identical
 // decision. No network call, no LLM, no transcript reading.

@@ -56,16 +56,8 @@ tabs: ## Show the current tab names
 watch-tabs: ## Watch the tab names
 	@./scripts/probe.py watch-tabs
 
-.PHONY: probe-events
-probe-events: ## Show Herdr's event stream (diagnostic; the plugin does not use it)
-	@./scripts/probe.py events
-
-.PHONY: probe-subs
-probe-subs: ## Show the subscription types Herdr accepts (diagnostic)
-	@./scripts/probe.py subs
-
 .PHONY: probe-snapshot
-probe-snapshot: ## Show the session snapshot
+probe-snapshot: ## Show the session snapshot the plugin polls
 	@./scripts/probe.py snapshot
 
 .PHONY: clean
