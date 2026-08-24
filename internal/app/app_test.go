@@ -40,9 +40,23 @@ type harness struct {
 
 func start(t *testing.T, snapshot herdr.Snapshot) *harness {
 	t.Helper()
+	return startWith(t, testConfig(), snapshot)
+}
+
+// startSweeping runs with sweeping on, which the other tests leave off so that
+// they exercise the event path alone.
+func startSweeping(t *testing.T, snapshot herdr.Snapshot) *harness {
+	t.Helper()
+	cfg := testConfig()
+	cfg.Sweep = 5 * testDebounce
+	return startWith(t, cfg, snapshot)
+}
+
+func startWith(t *testing.T, cfg Config, snapshot herdr.Snapshot) *harness {
+	t.Helper()
 
 	client := herdr.NewFake(snapshot)
-	app := New(testConfig(), discardLogger(), resolver.Default(resolver.DefaultMaxLength))
+	app := New(cfg, discardLogger(), resolver.Default(resolver.DefaultMaxLength))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	h := &harness{t: t, app: app, client: client, done: make(chan error, 1), cancel: cancel}
@@ -699,6 +713,81 @@ func TestTabClosingDuringAReadDropsItQuietly(t *testing.T) {
 		}
 		if time.Now().After(deadline) {
 			t.Fatal("a tab Herdr no longer knows about is still indexed")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestSweepNamesATabTheEventStreamNeverAnnounced(t *testing.T) {
+	// The case the sweep exists for. Herdr replays a backlog before it delivers
+	// anything live, so a tab opened during that window produces no event for
+	// as long as the replay lasts.
+	h := startSweeping(t, herdr.Snapshot{})
+
+	h.client.SetTab(herdr.TabInfo{TabID: "wE:t1", Label: "1"})
+	h.client.SetPane(herdr.PaneInfo{
+		PaneID: "wE:p1", TabID: "wE:t1", Focused: true,
+		CWD:                   "/Users/dev/work/dashboard",
+		TerminalTitleStripped: "Fix OAuth redirect",
+	})
+
+	renames := h.awaitRenames(1)
+	if want := "dashboard · Fix OAuth redirect"; renames[0].Label != want {
+		t.Errorf("rename = %q, want %q", renames[0].Label, want)
+	}
+}
+
+func TestSweepStopsOnceTheTitleAgrees(t *testing.T) {
+	h := startSweeping(t, herdr.Snapshot{
+		Tabs: []herdr.TabInfo{{TabID: "wE:t1", Label: "1"}},
+		Panes: []herdr.PaneInfo{
+			{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true},
+		},
+	})
+	h.awaitRenames(1)
+
+	// Several sweeps go by with nothing to do.
+	time.Sleep(20 * testDebounce)
+	if renames := h.client.Renames(); len(renames) != 1 {
+		t.Errorf("issued %v, want the sweep to rename nothing further", renames)
+	}
+}
+
+func TestSweepLeavesAManuallyNamedTabAlone(t *testing.T) {
+	h := startSweeping(t, herdr.Snapshot{
+		Tabs: []herdr.TabInfo{{TabID: "wE:t1", Label: "Important work"}},
+		Panes: []herdr.PaneInfo{
+			{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true},
+		},
+	})
+	h.app.Cache().SetManualName("wE:t1", true)
+
+	time.Sleep(20 * testDebounce)
+	if renames := h.client.Renames(); len(renames) != 0 {
+		t.Errorf("issued %v, want no rename for a manually named tab", renames)
+	}
+}
+
+func TestSweepDropsATabTheSessionNoLongerHolds(t *testing.T) {
+	h := startSweeping(t, herdr.Snapshot{
+		Tabs: []herdr.TabInfo{{TabID: "wE:t1", Label: "1"}},
+		Panes: []herdr.PaneInfo{
+			{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true},
+		},
+	})
+	h.awaitRenames(1)
+
+	// The tab closes and no tab_closed reaches the plugin.
+	h.client.CloseTab("wE:t1")
+	h.client.ClosePane("wE:p1")
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, ok := h.app.Cache().Panes("wE:t1"); !ok {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("a tab the session no longer holds is still indexed")
 		}
 		time.Sleep(time.Millisecond)
 	}

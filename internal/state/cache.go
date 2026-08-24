@@ -127,19 +127,68 @@ func (c *Cache) trackLocked(pane PaneRef) string {
 		c.tabs[pane.TabID] = tab
 	}
 
+	c.paneTab[pane.PaneID] = pane.TabID
+
 	entry, ok := tab.panes[pane.PaneID]
 	switch {
 	case !ok:
-		entry = &paneEntry{}
-		tab.panes[pane.PaneID] = entry
+		tab.panes[pane.PaneID] = &paneEntry{revision: pane.Revision, changedAt: c.now()}
 	case pane.Revision < entry.revision:
 		return ""
+	case pane.Revision > entry.revision:
+		entry.revision = pane.Revision
+		entry.changedAt = c.now()
+	}
+	// A repeat of the revision already held is the tail of a replay. It is
+	// worth reconciling once, but nothing about the pane changed, so the time
+	// it last changed must not move.
+	return pane.TabID
+}
+
+// Sync reconciles the index with a session snapshot: tabs and panes the index
+// has never seen are added, ones the session no longer holds are dropped, and
+// everything else keeps the history the index accumulated.
+//
+// Sweeping exists because the event stream runs behind. Herdr replays a backlog
+// on subscribe and delivers live events only once it has drained, so a tab
+// opened in the meantime is invisible to events for as long as the replay
+// lasts. A snapshot always describes the present.
+func (c *Cache) Sync(tabIDs []string, panes []PaneRef) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	live := make(map[string]struct{}, len(tabIDs))
+	for _, tabID := range tabIDs {
+		live[tabID] = struct{}{}
+		if _, ok := c.tabs[tabID]; !ok {
+			c.tabs[tabID] = newTabEntry()
+		}
 	}
 
-	entry.revision = pane.Revision
-	entry.changedAt = c.now()
-	c.paneTab[pane.PaneID] = pane.TabID
-	return pane.TabID
+	livePanes := make(map[string]struct{}, len(panes))
+	for _, pane := range panes {
+		livePanes[pane.PaneID] = struct{}{}
+		// A pane the snapshot places in a tab the list did not mention still
+		// belongs somewhere; trackLocked creates the tab for it.
+		live[pane.TabID] = struct{}{}
+		c.trackLocked(pane)
+	}
+
+	for tabID, tab := range c.tabs {
+		if _, ok := live[tabID]; !ok {
+			for paneID := range tab.panes {
+				delete(c.paneTab, paneID)
+			}
+			delete(c.tabs, tabID)
+			continue
+		}
+		for paneID := range tab.panes {
+			if _, ok := livePanes[paneID]; !ok {
+				delete(tab.panes, paneID)
+				delete(c.paneTab, paneID)
+			}
+		}
+	}
 }
 
 // TouchPane records that a pane changed without saying how, which is what the
@@ -203,6 +252,26 @@ func (c *Cache) Panes(tabID string) ([]PaneChange, bool) {
 type PaneChange struct {
 	PaneID    string
 	ChangedAt time.Time
+}
+
+// PaneChangedAt reports when a pane was last seen to change, or the zero time
+// for a pane the index does not hold.
+func (c *Cache) PaneChangedAt(paneID string) time.Time {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	tabID, ok := c.paneTab[paneID]
+	if !ok {
+		return time.Time{}
+	}
+	tab, ok := c.tabs[tabID]
+	if !ok {
+		return time.Time{}
+	}
+	if entry, ok := tab.panes[paneID]; ok {
+		return entry.changedAt
+	}
+	return time.Time{}
 }
 
 // TabIDs lists the indexed tabs in a stable order.

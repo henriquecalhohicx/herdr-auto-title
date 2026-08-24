@@ -4,8 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"sync"
 )
+
+// sorted flattens a map into a slice ordered by each value's id, so a fake
+// session is enumerated in the same order every time.
+func sorted[T any](items map[string]T, id func(T) string) []T {
+	out := make([]T, 0, len(items))
+	for _, item := range items {
+		out = append(out, item)
+	}
+	sort.Slice(out, func(i, j int) bool { return id(out[i]) < id(out[j]) })
+	return out
+}
 
 // RenameCall records one tab.rename issued through a FakeClient.
 type RenameCall struct {
@@ -158,11 +170,19 @@ func (f *FakeClient) Call(ctx context.Context, method string, params any, result
 
 	switch method {
 	case MethodSessionSnapshot:
-		if target, ok := result.(*snapshotResult); ok {
-			target.Snapshot = f.snapshot
-			return nil
+		target, ok := result.(*snapshotResult)
+		if !ok {
+			return fmt.Errorf("fake client: unexpected result type for %s", method)
 		}
-		return fmt.Errorf("fake client: unexpected result type for %s", method)
+		// Assembled from what reads would answer, so a snapshot never
+		// disagrees with tab.get and pane.get the way a stored copy would.
+		target.Snapshot = Snapshot{
+			Tabs:     sorted(f.tabs, func(t TabInfo) string { return t.TabID }),
+			Panes:    sorted(f.panes, func(p PaneInfo) string { return p.PaneID }),
+			Protocol: f.snapshot.Protocol,
+			Version:  f.snapshot.Version,
+		}
+		return nil
 
 	case MethodTabGet:
 		if f.readErr != nil {

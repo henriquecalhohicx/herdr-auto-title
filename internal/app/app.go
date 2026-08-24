@@ -113,6 +113,7 @@ func (a *App) Run(ctx context.Context, client herdr.Client) error {
 	)
 
 	a.startWorkers(ctx)
+	a.startSweeper(ctx)
 	defer a.stop()
 
 	// The snapshot is the initial state; reconcile what already exists before
@@ -146,6 +147,88 @@ func (a *App) startWorkers(ctx context.Context) {
 			}
 		}()
 	}
+}
+
+// startSweeper polls the session for changes the event stream has not caught up
+// with yet.
+//
+// Subscribing makes Herdr replay a backlog before it delivers anything live, so
+// for the first seconds of a run — about ten per active pane — an event about
+// something the user just did is still queued behind history. A tab opened in
+// that window would keep its number until the replay finished. A snapshot has
+// no such lag, and it costs one request no matter how many tabs the session
+// holds.
+//
+// The sweep never renames. It resolves from the snapshot it already has and,
+// when that disagrees with the tab's label, hands the tab to the debouncer, so
+// every rename still goes through the one path that reads before deciding.
+func (a *App) startSweeper(ctx context.Context) {
+	if a.cfg.Sweep <= 0 {
+		a.log.Debug("sweeping disabled")
+		return
+	}
+
+	a.workers.Add(1)
+	go func() {
+		defer a.workers.Done()
+
+		ticker := time.NewTicker(a.cfg.Sweep)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				a.sweep(ctx)
+			}
+		}
+	}()
+}
+
+func (a *App) sweep(ctx context.Context) {
+	readCtx, cancel := context.WithTimeout(ctx, readTimeout)
+	defer cancel()
+
+	snapshot, err := herdr.SessionSnapshot(readCtx, a.client)
+	if err != nil {
+		if ctx.Err() == nil {
+			a.log.Warn("sweep failed", "error", err)
+		}
+		return
+	}
+
+	a.cache.Sync(tabIDs(snapshot), paneRefs(snapshot))
+
+	for _, tab := range a.tabsIn(snapshot) {
+		if a.cache.HasManualName(tab.ID) {
+			continue
+		}
+		decision := a.titles.Resolve(ctx, tab)
+		if decision.Name == "" || decision.Name == tab.CurrentName {
+			continue
+		}
+		a.log.Debug("sweep found a stale title",
+			"tab_id", tab.ID, "current", tab.CurrentName, "want", decision.Name)
+		a.debouncer.Schedule(tab.ID)
+	}
+}
+
+// tabsIn assembles the snapshot's tabs, each with the panes it holds. The
+// snapshot already carries every pane's context, so this costs no further
+// requests.
+func (a *App) tabsIn(snapshot herdr.Snapshot) []state.TabState {
+	byTab := make(map[string][]*state.PaneState, len(snapshot.Tabs))
+	for _, pane := range snapshot.Panes {
+		changedAt := a.cache.PaneChangedAt(pane.PaneID)
+		byTab[pane.TabID] = append(byTab[pane.TabID], state.PaneFrom(pane, changedAt))
+	}
+
+	tabs := make([]state.TabState, 0, len(snapshot.Tabs))
+	for _, info := range snapshot.Tabs {
+		tabs = append(tabs, state.TabFrom(info, byTab[info.TabID]))
+	}
+	return tabs
 }
 
 // stop shuts the pipeline down in order: no more timers, then no more queued

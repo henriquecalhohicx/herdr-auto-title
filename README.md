@@ -46,8 +46,8 @@ Herdr socket (NDJSON)
   socket reader ──► event channel ──► event router
                                           │
                                           ▼
-                                    session index
-                                          │
+                                    session index ◄── session.snapshot
+                                          │            every 2s (sweep)
                                           ▼
                                  per-tab debounce (200ms)
                                           │
@@ -68,7 +68,9 @@ Herdr socket (NDJSON)
 ```
 
 Auto Title reacts to changes in terminal context; it does not continuously try
-to understand the terminal. There is no polling loop and no scrollback scanning.
+to understand the terminal. There is no scrollback scanning, and the only
+polling is a two-second sweep that exists because Herdr's event stream starts
+out behind.
 
 - **Bootstrap.** On connect it subscribes to events, calls `session.snapshot`
   once to seed the index, and reconciles the tabs that already exist.
@@ -83,6 +85,15 @@ to understand the terminal. There is no polling loop and no scrollback scanning.
   title, so a stale trigger can cost a redundant read and nothing worse. It also
   supplies the tab's real current label, which is what deduplication compares
   against.
+- **Sweep.** Events are not enough on their own. Subscribing makes Herdr replay
+  a backlog first, and live events queue behind it, so for the first seconds of
+  a run — about ten per active pane — an event about something the user just did
+  is still waiting behind history. Every two seconds Auto Title therefore takes
+  a `session.snapshot`, which has no such lag and costs one request whatever the
+  session holds. The sweep never renames: it resolves from the snapshot it
+  already has and hands disagreeing tabs to the debouncer, so every rename still
+  goes through the one path that reads before deciding. It also notices tabs and
+  panes that opened or closed while the stream was catching up.
 - **Router.** The socket reader never does expensive work. Events go through a
   channel to a router that updates the index and arms a timer.
 - **Debounce.** Each tab has its own 200 ms timer. A burst of events on one tab
@@ -167,6 +178,7 @@ an unusable value is logged as a warning and the default is kept.
 | `HERDR_AUTO_TITLE_DEBUG` | `false` | Log at DEBUG instead of INFO |
 | `HERDR_AUTO_TITLE_DEBOUNCE_MS` | `200` | Per-tab debounce window; the cap on a continuous burst is five times this |
 | `HERDR_AUTO_TITLE_MAX_LENGTH` | `64` | Maximum title length in characters |
+| `HERDR_AUTO_TITLE_SWEEP_MS` | `2000` | How often the session is swept for changes the event stream has not caught up with; `0` turns sweeping off |
 
 Auto Title logs to stderr through `log/slog`. Raw terminal output and command
 arguments are never logged.

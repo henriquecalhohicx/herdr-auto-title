@@ -185,3 +185,65 @@ func TestCacheIsSafeUnderConcurrentUse(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestSyncAddsWhatEventsNeverDelivered(t *testing.T) {
+	c := NewCache()
+	c.Reset([]string{"wE:t1"}, []PaneRef{ref("wE:p1", "wE:t1", 1)})
+
+	c.Sync([]string{"wE:t1", "wE:t2"}, []PaneRef{
+		ref("wE:p1", "wE:t1", 1),
+		ref("wE:p2", "wE:t2", 1),
+	})
+
+	if got := c.TabIDs(); len(got) != 2 || got[1] != "wE:t2" {
+		t.Fatalf("tab ids = %v, want [wE:t1 wE:t2]", got)
+	}
+	if got := paneIDs(t, c, "wE:t2"); len(got) != 1 || got[0] != "wE:p2" {
+		t.Errorf("panes of wE:t2 = %v, want [wE:p2]", got)
+	}
+}
+
+func TestSyncDropsWhatTheSessionNoLongerHolds(t *testing.T) {
+	c := NewCache()
+	c.Reset([]string{"wE:t1", "wE:t2"}, []PaneRef{
+		ref("wE:p1", "wE:t1", 1),
+		ref("wE:p2", "wE:t1", 1),
+		ref("wE:p3", "wE:t2", 1),
+	})
+
+	c.Sync([]string{"wE:t1"}, []PaneRef{ref("wE:p1", "wE:t1", 1)})
+
+	if got := c.TabIDs(); len(got) != 1 || got[0] != "wE:t1" {
+		t.Errorf("tab ids = %v, want [wE:t1]", got)
+	}
+	if got := paneIDs(t, c, "wE:t1"); len(got) != 1 || got[0] != "wE:p1" {
+		t.Errorf("panes = %v, want [wE:p1]", got)
+	}
+	if got := c.TouchPane("wE:p3"); got != "" {
+		t.Errorf("a pane of a closed tab survived as %q", got)
+	}
+}
+
+func TestSyncKeepsWhatTheIndexAccumulated(t *testing.T) {
+	c := NewCache()
+	c.Reset([]string{"wE:t1"}, []PaneRef{ref("wE:p1", "wE:t1", 7)})
+	c.SetManualName("wE:t1", true)
+	before := c.PaneChangedAt("wE:p1")
+
+	// A sweep that finds nothing new must not look like a change.
+	c.now = func() time.Time { return before.Add(time.Hour) }
+	c.Sync([]string{"wE:t1"}, []PaneRef{ref("wE:p1", "wE:t1", 7)})
+
+	if !c.HasManualName("wE:t1") {
+		t.Error("the manual mark was lost")
+	}
+	if got := c.PaneChangedAt("wE:p1"); !got.Equal(before) {
+		t.Errorf("changed at moved to %v, want %v", got, before)
+	}
+
+	// A revision that advanced is a real change.
+	c.Sync([]string{"wE:t1"}, []PaneRef{ref("wE:p1", "wE:t1", 8)})
+	if got := c.PaneChangedAt("wE:p1"); !got.After(before) {
+		t.Error("an advanced revision was not recorded as a change")
+	}
+}
