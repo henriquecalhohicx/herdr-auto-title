@@ -133,12 +133,20 @@ field when an agent does set it; in practice most agent context arrives one rung
 lower, through the terminal title.
 
 A pane running `ssh` is named after the machine it reached, not the directory it
-was launched from: `prod-01 · SSH`. The host is the context, so a title the
-remote shell sets still fits beside it. The user is dropped — `root@prod-01` and
-`deploy@prod-01` are the same machine, and a tab bar has no room to say who is
-logged in. Options are parsed rather than guessed at, so `ssh -p 2222 prod-01`
-and `ssh prod-01 tail -f /var/log/syslog` both yield `prod-01`; a destination
-that cannot be read still marks the tab as remote.
+was launched from: `ssh:prod-01`, and `ssh:prod-01 · Restart the queue workers`
+once the remote shell has something to report.
+
+The `ssh:` mark goes on the host rather than into the activity slot, because the
+activity is contested — a remote shell sets a terminal title, that title outranks
+anything this source could put there, and the tab would stop saying it is remote
+at exactly the moment it has most to say. Nothing else names a machine, so the
+host slot has no such competition.
+
+The user is dropped: `root@prod-01` and `deploy@prod-01` are the same machine,
+and a tab bar has no room to say who is logged in. Options are parsed rather than
+guessed at, so `ssh -p 2222 prod-01` and `ssh prod-01 tail -f /var/log/syslog`
+both yield `prod-01`. A destination that cannot be read still marks the tab
+remote, as `dashboard · SSH`.
 
 Inside a repository the branch becomes the activity, so a tab reads
 `dashboard · MC-13200`. Branch names are far too long to use whole — the ones

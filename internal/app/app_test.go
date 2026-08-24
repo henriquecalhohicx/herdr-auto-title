@@ -320,7 +320,7 @@ func TestARemoteSessionIsNamedAfterItsHost(t *testing.T) {
 	)
 
 	renames := h.awaitRenames(2)
-	if want := "prod-01 · SSH"; renames[1].Label != want {
+	if want := "ssh:prod-01"; renames[1].Label != want {
 		t.Errorf("rename = %q, want %q", renames[1].Label, want)
 	}
 }

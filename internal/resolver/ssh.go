@@ -6,8 +6,19 @@ import (
 	"herdr-auto-title/internal/state"
 )
 
-// SSHActivity is what an ssh session contributes when the host is the context.
-const SSHActivity = "SSH"
+const (
+	// SSHHostPrefix marks a host as reached over ssh.
+	//
+	// The mark belongs on the host rather than in the activity slot, because
+	// the activity is contested: a remote shell sets a terminal title, that
+	// title outranks anything this source could put there, and the tab would
+	// stop saying it is remote at exactly the moment it has most to say. The
+	// host slot has no such competition — nothing else names a machine.
+	SSHHostPrefix = "ssh:"
+	// SSHActivity marks a session whose host could not be read, where there is
+	// no host to attach the prefix to.
+	SSHActivity = "SSH"
+)
 
 // sshFlagsWithValue are the ssh options whose value is a separate argument, so
 // `ssh -p 2222 prod-01` must not read 2222 as the destination.
@@ -25,7 +36,9 @@ var sshFlagsWithValue = map[byte]struct{}{
 // A shell on a remote machine has a working directory and a terminal title like
 // any other, and both describe the remote — but neither says which machine, and
 // that is the thing a tab full of identical-looking shells needs to say. The
-// host becomes the context, so the tab reads `prod-01 · SSH`.
+// host becomes the context, marked as remote: `ssh:prod-01`, and
+// `ssh:prod-01 · Restart the queue workers` once the remote shell has something
+// to report.
 //
 // The user is deliberately dropped: `root@prod-01` and `deploy@prod-01` are the
 // same machine, and a tab bar has no room to say who is logged in.
@@ -46,12 +59,13 @@ func (SSH) Resolve(pane *state.PaneState) (Parts, bool) {
 	}
 
 	// A session whose destination cannot be read is still worth marking as
-	// remote; the working directory supplies the context instead.
+	// remote; the working directory then supplies the context and the mark has
+	// to go in the activity instead.
 	host := Sanitize(sshHost(args), 0)
 	if host == "" {
 		return Parts{Activity: SSHActivity, Confidence: ConfidenceSSH}, true
 	}
-	return Parts{Context: host, Activity: SSHActivity, Confidence: ConfidenceSSH}, true
+	return Parts{Context: SSHHostPrefix + host, Confidence: ConfidenceSSH}, true
 }
 
 // sshArgs finds an ssh process in the pane and returns its arguments.
