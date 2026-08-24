@@ -128,12 +128,12 @@ func TestContextAndActivityComeFromTheSamePane(t *testing.T) {
 		ID: "wE:t1",
 		Panes: map[string]*state.PaneState{
 			"wE:p1": {
-				ID: "wE:p1", TabID: "wE:t1",
+				ID:            "wE:p1",
 				CWD:           "/Users/dev/work/api",
 				TerminalTitle: "Run migrations",
 			},
 			"wE:p2": {
-				ID: "wE:p2", TabID: "wE:t1",
+				ID:          "wE:p2",
 				CWD:         "/Users/dev/work/dashboard",
 				Agent:       "claude",
 				AgentStatus: herdr.AgentStatusWorking,

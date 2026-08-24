@@ -5,6 +5,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -24,6 +25,8 @@ const (
 	queueBuffer = 128
 	// renameTimeout bounds a single tab.rename call.
 	renameTimeout = 5 * time.Second
+	// readTimeout bounds reading one tab's state back from Herdr.
+	readTimeout = 5 * time.Second
 )
 
 // Subscriptions lists the event streams Auto Title needs.
@@ -101,7 +104,7 @@ func (a *App) Run(ctx context.Context, client herdr.Client) error {
 	if err != nil {
 		return fmt.Errorf("bootstrap session snapshot: %w", err)
 	}
-	a.cache.Reset(snapshot)
+	a.cache.Reset(tabIDs(snapshot), paneRefs(snapshot))
 	a.log.Info("session snapshot loaded",
 		"tabs", len(snapshot.Tabs),
 		"panes", len(snapshot.Panes),
@@ -163,7 +166,7 @@ func (a *App) handleEvent(event herdr.Event) {
 			return
 		}
 		a.log.Debug("event received", "type", event.Kind, "tab_id", data.Tab.TabID)
-		a.cache.UpsertTab(data.Tab)
+		a.cache.AddTab(data.Tab.TabID)
 		a.debouncer.Schedule(data.Tab.TabID)
 
 	case herdr.EventTabClosed:
@@ -181,7 +184,7 @@ func (a *App) handleEvent(event herdr.Event) {
 			return
 		}
 		a.log.Debug("event received", "type", event.Kind, "pane_id", data.Pane.PaneID)
-		if tabID := a.cache.UpsertPane(data.Pane); tabID != "" {
+		if tabID := a.cache.TrackPane(paneRef(data.Pane)); tabID != "" {
 			a.debouncer.Schedule(tabID)
 		}
 
@@ -190,9 +193,8 @@ func (a *App) handleEvent(event herdr.Event) {
 		if !ok {
 			return
 		}
-		a.log.Debug("event received", "type", event.Kind,
-			"pane_id", data.PaneID, "agent", data.Agent, "released", data.Released)
-		if tabID := a.cache.SetPaneAgent(data); tabID != "" {
+		a.log.Debug("event received", "type", event.Kind, "pane_id", data.PaneID)
+		if tabID := a.cache.TouchPane(data.PaneID); tabID != "" {
 			a.debouncer.Schedule(tabID)
 		}
 
@@ -213,28 +215,43 @@ func (a *App) handleEvent(event herdr.Event) {
 	}
 }
 
-// reconcile resolves the tab's title and renames it if it differs.
+// reconcile reads the tab back from Herdr, resolves its title and renames it if
+// it differs.
+//
+// The read is the point of this function. Events are triggers: Herdr replays a
+// backlog of them on subscribe, so deciding from an event payload names a tab
+// after a moment that has already passed.
 func (a *App) reconcile(ctx context.Context, tabID string) {
 	if ctx.Err() != nil {
 		return
 	}
-
-	tab, ok := a.cache.Tab(tabID)
-	if !ok {
-		// The tab closed between the timer firing and this worker picking it up.
-		return
-	}
-	if tab.ManualName {
+	if a.cache.HasManualName(tabID) {
 		a.log.Debug("skipping tab renamed by hand", "tab_id", tabID)
 		return
 	}
 
-	decision := a.titles.Resolve(ctx, tab)
-	if decision.Name == "" {
+	readCtx, cancelRead := context.WithTimeout(ctx, readTimeout)
+	tab, err := a.readTab(readCtx, tabID)
+	cancelRead()
+	if err != nil {
+		if errors.Is(err, errUnknownTab) {
+			// The tab left the index between the timer firing and this worker
+			// picking it up.
+			return
+		}
+		if herdr.ErrorCode(err) == herdr.CodeTabNotFound {
+			a.forgetTab(tabID, "tab closed before it could be read")
+			return
+		}
+		if ctx.Err() == nil {
+			a.log.Warn("reading tab state failed", "tab_id", tabID, "error", err)
+		}
 		return
 	}
-	if decision.Name == tab.CurrentName {
-		a.log.Debug("title unchanged", "tab_id", tabID, "name", decision.Name)
+
+	decision := a.titles.Resolve(ctx, tab)
+	if decision.Name == "" || decision.Name == tab.CurrentName {
+		a.log.Debug("title unchanged", "tab_id", tabID, "name", tab.CurrentName)
 		return
 	}
 
@@ -243,20 +260,13 @@ func (a *App) reconcile(ctx context.Context, tabID string) {
 
 	if err := herdr.RenameTab(renameCtx, a.client, tabID, decision.Name); err != nil {
 		if herdr.ErrorCode(err) == herdr.CodeTabNotFound {
-			// The tab closed between resolution and the rename. Herdr will
-			// deliver tab_closed too, but a short-lived tab can be gone before
-			// that arrives, so drop it here rather than logging a warning.
-			a.log.Debug("tab closed before it could be renamed", "tab_id", tabID)
-			a.debouncer.Cancel(tabID)
-			a.cache.RemoveTab(tabID)
+			a.forgetTab(tabID, "tab closed before it could be renamed")
 			return
 		}
 		a.log.Warn("rename failed", "tab_id", tabID, "name", decision.Name, "error", err)
 		return
 	}
 
-	a.cache.SetCurrentName(tabID, decision.Name)
-	a.cache.MarkReconciled(tabID, time.Now())
 	a.log.Info("tab renamed",
 		"tab_id", tabID,
 		"old", tab.CurrentName,
@@ -264,6 +274,69 @@ func (a *App) reconcile(ctx context.Context, tabID string) {
 		"reason", decision.Reason,
 		"confidence", decision.Confidence,
 	)
+}
+
+// errUnknownTab reports a tab the index no longer holds.
+var errUnknownTab = errors.New("tab is not in the index")
+
+// readTab reads a tab and its panes as they are right now.
+func (a *App) readTab(ctx context.Context, tabID string) (state.TabState, error) {
+	panes, ok := a.cache.Panes(tabID)
+	if !ok {
+		return state.TabState{}, errUnknownTab
+	}
+
+	info, err := herdr.GetTab(ctx, a.client, tabID)
+	if err != nil {
+		return state.TabState{}, err
+	}
+
+	read := make([]*state.PaneState, 0, len(panes))
+	for _, pane := range panes {
+		got, err := herdr.GetPane(ctx, a.client, pane.PaneID)
+		if err != nil {
+			if herdr.ErrorCode(err) == herdr.CodePaneNotFound {
+				// The pane closed since the index recorded it. Herdr will
+				// deliver pane_closed too, but the tab can be named without
+				// waiting for it.
+				a.log.Debug("dropping pane that has closed", "pane_id", pane.PaneID)
+				a.cache.RemovePane(pane.PaneID)
+				continue
+			}
+			return state.TabState{}, err
+		}
+		read = append(read, state.PaneFrom(got, pane.ChangedAt))
+	}
+	return state.TabFrom(info, read), nil
+}
+
+// forgetTab drops a tab that Herdr says is gone. Herdr will deliver tab_closed
+// too, but a short-lived tab can vanish before that arrives.
+func (a *App) forgetTab(tabID, reason string) {
+	a.log.Debug(reason, "tab_id", tabID)
+	a.debouncer.Cancel(tabID)
+	a.cache.RemoveTab(tabID)
+}
+
+// tabIDs and paneRefs reduce a snapshot to the identity the index keeps.
+func tabIDs(snapshot herdr.Snapshot) []string {
+	ids := make([]string, 0, len(snapshot.Tabs))
+	for _, tab := range snapshot.Tabs {
+		ids = append(ids, tab.TabID)
+	}
+	return ids
+}
+
+func paneRefs(snapshot herdr.Snapshot) []state.PaneRef {
+	refs := make([]state.PaneRef, 0, len(snapshot.Panes))
+	for _, pane := range snapshot.Panes {
+		refs = append(refs, paneRef(pane))
+	}
+	return refs
+}
+
+func paneRef(pane herdr.PaneInfo) state.PaneRef {
+	return state.PaneRef{PaneID: pane.PaneID, TabID: pane.TabID, Revision: pane.Revision}
 }
 
 // decodeEvent unmarshals an event payload, treating a malformed one as an event

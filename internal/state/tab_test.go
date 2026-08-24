@@ -12,9 +12,9 @@ func TestSelectContextPanePrefersFocused(t *testing.T) {
 	tab := TabState{
 		ID: "wE:t1",
 		Panes: map[string]*PaneState{
-			"wE:p1": {ID: "wE:p1", UpdatedAt: now},
-			"wE:p2": {ID: "wE:p2", UpdatedAt: now.Add(time.Minute), Focused: true},
-			"wE:p3": {ID: "wE:p3", UpdatedAt: now.Add(time.Hour)},
+			"wE:p1": {ID: "wE:p1", ChangedAt: now},
+			"wE:p2": {ID: "wE:p2", ChangedAt: now.Add(time.Minute), Focused: true},
+			"wE:p3": {ID: "wE:p3", ChangedAt: now.Add(time.Hour)},
 		},
 	}
 
@@ -28,9 +28,9 @@ func TestSelectContextPaneFallsBackToMostRecent(t *testing.T) {
 	tab := TabState{
 		ID: "wE:t1",
 		Panes: map[string]*PaneState{
-			"wE:p1": {ID: "wE:p1", UpdatedAt: now},
-			"wE:p2": {ID: "wE:p2", UpdatedAt: now.Add(time.Hour)},
-			"wE:p3": {ID: "wE:p3", UpdatedAt: now.Add(time.Minute)},
+			"wE:p1": {ID: "wE:p1", ChangedAt: now},
+			"wE:p2": {ID: "wE:p2", ChangedAt: now.Add(time.Hour)},
+			"wE:p3": {ID: "wE:p3", ChangedAt: now.Add(time.Minute)},
 		},
 	}
 
@@ -39,14 +39,62 @@ func TestSelectContextPaneFallsBackToMostRecent(t *testing.T) {
 	}
 }
 
+func TestTabFromKeepsItsLabel(t *testing.T) {
+	tab := TabFrom(
+		herdr.TabInfo{TabID: "wE:t1", Label: "dashboard"},
+		[]*PaneState{{ID: "wE:p1", CWD: "/work/dashboard"}},
+	)
+
+	if tab.CurrentName != "dashboard" {
+		t.Errorf("current name = %q, want dashboard", tab.CurrentName)
+	}
+	if pane := tab.Panes["wE:p1"]; pane == nil || pane.CWD != "/work/dashboard" {
+		t.Errorf("pane wE:p1 = %+v, want cwd /work/dashboard", pane)
+	}
+}
+
+func TestPaneFromReadsAgentContext(t *testing.T) {
+	stamp := time.Now()
+	pane := PaneFrom(herdr.PaneInfo{
+		PaneID:                "wE:p1",
+		CWD:                   "/work/dashboard",
+		TerminalTitle:         "\u2733 Claude Code",
+		TerminalTitleStripped: "Claude Code",
+		Title:                 "Implement OAuth scopes",
+		Agent:                 "claude",
+		DisplayAgent:          "Claude Code",
+		AgentStatus:           herdr.AgentStatusWorking,
+	}, stamp)
+
+	switch {
+	case pane.TerminalTitle != "Claude Code":
+		t.Errorf("terminal title = %q, want the stripped one", pane.TerminalTitle)
+	case pane.TerminalTitleRaw != "\u2733 Claude Code":
+		t.Errorf("raw terminal title = %q", pane.TerminalTitleRaw)
+	case pane.AgentTitle != "Implement OAuth scopes":
+		t.Errorf("agent title = %q", pane.AgentTitle)
+	case !pane.AgentIsActive():
+		t.Error("a working agent is not active")
+	case !pane.ChangedAt.Equal(stamp):
+		t.Errorf("changed at = %v, want %v", pane.ChangedAt, stamp)
+	}
+}
+
+func TestPaneWithoutAnAgent(t *testing.T) {
+	pane := PaneFrom(herdr.PaneInfo{PaneID: "wE:p1", AgentStatus: herdr.AgentStatusUnknown}, time.Now())
+	if pane.HasAgent() || pane.AgentIsActive() {
+		t.Errorf("pane %+v reported an agent", pane)
+	}
+}
+
 func TestSelectContextPaneBreaksTiesOnID(t *testing.T) {
 	stamp := time.Now()
 	tab := TabState{
 		ID: "wE:t1",
 		Panes: map[string]*PaneState{
-			"wE:p3": {ID: "wE:p3", UpdatedAt: stamp},
-			"wE:p1": {ID: "wE:p1", UpdatedAt: stamp},
-			"wE:p2": {ID: "wE:p2", UpdatedAt: stamp},
+			"wE:p3": {ID: "wE:p3", ChangedAt: stamp},
+			"wE:p1": {ID: "wE:p1", ChangedAt: stamp},
+			"wE:p2": {ID: "wE:p2", ChangedAt: stamp},
 		},
 	}
 
@@ -65,31 +113,6 @@ func TestSelectContextPaneWithoutPanes(t *testing.T) {
 	}
 }
 
-func TestCloneIsIndependent(t *testing.T) {
-	tab := &TabState{
-		ID:          "wE:t1",
-		CurrentName: "dashboard",
-		Panes: map[string]*PaneState{
-			"wE:p1": {ID: "wE:p1", CWD: "/work/dashboard"},
-		},
-	}
-
-	clone := tab.Clone()
-	clone.CurrentName = "changed"
-	clone.Panes["wE:p1"].CWD = "/work/other"
-	clone.Panes["wE:p2"] = &PaneState{ID: "wE:p2"}
-
-	if tab.CurrentName != "dashboard" {
-		t.Errorf("clone leaked its name into the original: %q", tab.CurrentName)
-	}
-	if tab.Panes["wE:p1"].CWD != "/work/dashboard" {
-		t.Errorf("clone leaked pane state into the original: %q", tab.Panes["wE:p1"].CWD)
-	}
-	if len(tab.Panes) != 1 {
-		t.Errorf("clone added a pane to the original: %d panes", len(tab.Panes))
-	}
-}
-
 func TestSelectContextPanePrefersAnActiveAgent(t *testing.T) {
 	now := time.Now()
 	tab := TabState{
@@ -97,8 +120,8 @@ func TestSelectContextPanePrefersAnActiveAgent(t *testing.T) {
 		Panes: map[string]*PaneState{
 			// The agent runs in a split the user is not typing in, so a build
 			// scrolling past in the pane below keeps winning on recency.
-			"wE:p1": {ID: "wE:p1", UpdatedAt: now, Agent: "claude", AgentStatus: herdr.AgentStatusWorking},
-			"wE:p2": {ID: "wE:p2", UpdatedAt: now.Add(time.Hour)},
+			"wE:p1": {ID: "wE:p1", ChangedAt: now, Agent: "claude", AgentStatus: herdr.AgentStatusWorking},
+			"wE:p2": {ID: "wE:p2", ChangedAt: now.Add(time.Hour)},
 		},
 	}
 
@@ -114,8 +137,8 @@ func TestSelectContextPaneIgnoresAnIdleAgent(t *testing.T) {
 			tab := TabState{
 				ID: "wE:t1",
 				Panes: map[string]*PaneState{
-					"wE:p1": {ID: "wE:p1", UpdatedAt: now, Agent: "claude", AgentStatus: status},
-					"wE:p2": {ID: "wE:p2", UpdatedAt: now.Add(time.Hour)},
+					"wE:p1": {ID: "wE:p1", ChangedAt: now, Agent: "claude", AgentStatus: status},
+					"wE:p2": {ID: "wE:p2", ChangedAt: now.Add(time.Hour)},
 				},
 			}
 
@@ -131,8 +154,8 @@ func TestSelectContextPanePrefersTheFocusedPaneOverAnAgent(t *testing.T) {
 	tab := TabState{
 		ID: "wE:t1",
 		Panes: map[string]*PaneState{
-			"wE:p1": {ID: "wE:p1", UpdatedAt: now, Agent: "claude", AgentStatus: herdr.AgentStatusWorking},
-			"wE:p2": {ID: "wE:p2", UpdatedAt: now, Focused: true},
+			"wE:p1": {ID: "wE:p1", ChangedAt: now, Agent: "claude", AgentStatus: herdr.AgentStatusWorking},
+			"wE:p2": {ID: "wE:p2", ChangedAt: now, Focused: true},
 		},
 	}
 
@@ -146,9 +169,9 @@ func TestSelectContextPaneAmongSeveralAgents(t *testing.T) {
 	tab := TabState{
 		ID: "wE:t1",
 		Panes: map[string]*PaneState{
-			"wE:p1": {ID: "wE:p1", UpdatedAt: now, Agent: "claude", AgentStatus: herdr.AgentStatusWorking},
-			"wE:p2": {ID: "wE:p2", UpdatedAt: now.Add(time.Hour), Agent: "claude", AgentStatus: herdr.AgentStatusBlocked},
-			"wE:p3": {ID: "wE:p3", UpdatedAt: now.Add(2 * time.Hour)},
+			"wE:p1": {ID: "wE:p1", ChangedAt: now, Agent: "claude", AgentStatus: herdr.AgentStatusWorking},
+			"wE:p2": {ID: "wE:p2", ChangedAt: now.Add(time.Hour), Agent: "claude", AgentStatus: herdr.AgentStatusBlocked},
+			"wE:p3": {ID: "wE:p3", ChangedAt: now.Add(2 * time.Hour)},
 		},
 	}
 

@@ -327,6 +327,28 @@ func SessionSnapshot(ctx context.Context, c Client) (Snapshot, error) {
 	return res.Snapshot, nil
 }
 
+// GetTab reads a tab's current state.
+//
+// Reading is how Auto Title learns what a tab holds. Events are only triggers:
+// Herdr replays a backlog of them on subscribe, so an event payload describes
+// some past moment, while a read always answers with the present.
+func GetTab(ctx context.Context, c Client, tabID string) (TabInfo, error) {
+	var res tabInfoResult
+	if err := c.Call(ctx, MethodTabGet, TabTarget{TabID: tabID}, &res); err != nil {
+		return TabInfo{}, err
+	}
+	return res.Tab, nil
+}
+
+// GetPane reads a pane's current state.
+func GetPane(ctx context.Context, c Client, paneID string) (PaneInfo, error) {
+	var res paneInfoResult
+	if err := c.Call(ctx, MethodPaneGet, PaneTarget{PaneID: paneID}, &res); err != nil {
+		return PaneInfo{}, err
+	}
+	return res.Pane, nil
+}
+
 // RenameTab sets a tab's label.
 func RenameTab(ctx context.Context, c Client, tabID, label string) error {
 	return c.Call(ctx, MethodTabRename, TabRenameParams{TabID: tabID, Label: label}, nil)

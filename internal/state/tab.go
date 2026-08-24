@@ -1,6 +1,10 @@
-// Package state holds Auto Title's in-memory view of the Herdr session.
+// Package state holds Auto Title's view of the Herdr session.
 //
-// The snapshot seeds it once; afterwards it is updated only from events.
+// The session snapshot seeds an index of which panes belong to which tab, and
+// events keep that index current. The content of a tab — titles, directories,
+// agents — is never cached: it is read back from Herdr when a tab is about to
+// be renamed, because Herdr replays a backlog of events on subscribe and a
+// payload therefore describes some past moment rather than the present.
 package state
 
 import (
@@ -10,10 +14,10 @@ import (
 	"herdr-auto-title/internal/herdr"
 )
 
-// PaneState is the cached context of one pane.
+// PaneState is one pane's context as Herdr reported it when it was last read.
 type PaneState struct {
-	ID            string
-	TabID         string
+	ID string
+
 	CWD           string
 	ForegroundCWD string
 	// TerminalTitle is Herdr's cleaned title; TerminalTitleRaw still carries
@@ -29,11 +33,29 @@ type PaneState struct {
 	DisplayAgent string
 	AgentTitle   string
 	AgentStatus  string
-	AgentSession string
 
-	Focused   bool
-	Revision  uint64
-	UpdatedAt time.Time
+	Focused bool
+	// ChangedAt is when Auto Title last saw an event for this pane. Herdr's
+	// reads carry no timestamp, so this is the only ordering available when a
+	// tab holds several panes and none is focused.
+	ChangedAt time.Time
+}
+
+// PaneFrom builds pane context from what a read returned.
+func PaneFrom(info herdr.PaneInfo, changedAt time.Time) *PaneState {
+	return &PaneState{
+		ID:               info.PaneID,
+		CWD:              info.CWD,
+		ForegroundCWD:    info.ForegroundCWD,
+		TerminalTitle:    info.TerminalTitleStripped,
+		TerminalTitleRaw: info.TerminalTitle,
+		Agent:            info.Agent,
+		DisplayAgent:     info.DisplayAgent,
+		AgentTitle:       info.Title,
+		AgentStatus:      info.AgentStatus,
+		Focused:          info.Focused,
+		ChangedAt:        changedAt,
+	}
 }
 
 // HasAgent reports whether Herdr recognizes an agent in the pane.
@@ -56,39 +78,26 @@ func (p *PaneState) AgentIsActive() bool {
 	}
 }
 
-// Clone returns an independent copy, so callers can read pane context without
-// holding the cache lock.
-func (p *PaneState) Clone() *PaneState {
-	if p == nil {
-		return nil
-	}
-	c := *p
-	return &c
-}
-
-// TabState is the cached state of one tab.
+// TabState is one tab as it was last read: its current label and its panes.
 type TabState struct {
-	ID          string
-	WorkspaceID string
+	ID string
+	// CurrentName is the label the tab carries right now, which is what lets
+	// reconciliation skip a rename that would change nothing.
 	CurrentName string
 	Panes       map[string]*PaneState
-
-	// ManualName marks a tab the user renamed by hand. Manual rename detection
-	// is not implemented yet; the flag is honoured wherever it is read.
-	ManualName bool
-
-	Revision         uint64
-	LastReconciledAt time.Time
 }
 
-// Clone returns a deep copy of the tab and its panes.
-func (t *TabState) Clone() TabState {
-	c := *t
-	c.Panes = make(map[string]*PaneState, len(t.Panes))
-	for id, p := range t.Panes {
-		c.Panes[id] = p.Clone()
+// TabFrom builds tab state from what a read returned.
+func TabFrom(info herdr.TabInfo, panes []*PaneState) TabState {
+	tab := TabState{
+		ID:          info.TabID,
+		CurrentName: info.Label,
+		Panes:       make(map[string]*PaneState, len(panes)),
 	}
-	return c
+	for _, pane := range panes {
+		tab.Panes[pane.ID] = pane
+	}
+	return tab
 }
 
 // SortedPanes returns the tab's panes ordered by ID, giving every traversal a
@@ -105,10 +114,11 @@ func (t TabState) SortedPanes() []*PaneState {
 // SelectContextPane picks the pane that provides the tab's primary context.
 //
 // The order is: the focused pane, then the pane running an active agent, then
-// the most recently updated pane. Exactly one pane is chosen and the title is
-// built from it alone, so two panes never blend into a name describing neither.
+// the pane that changed most recently. Exactly one pane is chosen and the title
+// is built from it alone, so two panes never blend into a name describing
+// neither.
 //
-// Ties break on the most recent update and then on pane ID, so identical state
+// Ties break on the most recent change and then on pane ID, so identical state
 // always yields the same choice.
 func SelectContextPane(tab TabState) *PaneState {
 	panes := tab.SortedPanes()
@@ -140,7 +150,7 @@ func filter(panes []*PaneState, keep func(*PaneState) bool) []*PaneState {
 	return kept
 }
 
-// mostRecent returns the last-updated pane of an ID-ordered slice. The strict
+// mostRecent returns the last-changed pane of an ID-ordered slice. The strict
 // comparison keeps the lowest ID when timestamps tie.
 func mostRecent(panes []*PaneState) *PaneState {
 	if len(panes) == 0 {
@@ -148,7 +158,7 @@ func mostRecent(panes []*PaneState) *PaneState {
 	}
 	best := panes[0]
 	for _, p := range panes[1:] {
-		if p.UpdatedAt.After(best.UpdatedAt) {
+		if p.ChangedAt.After(best.ChangedAt) {
 			best = p
 		}
 	}

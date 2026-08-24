@@ -4,69 +4,80 @@ import (
 	"sort"
 	"sync"
 	"time"
-
-	"herdr-auto-title/internal/herdr"
 )
 
-// Cache is the concurrency-safe store of tab and pane state.
+// Cache is the concurrency-safe index of what the session contains.
 //
-// Panes are indexed by tab so a closing tab takes its panes with it, and
-// separately by pane ID because pane_closed events do not name the tab.
+// It holds identity, not content: which panes belong to which tab, when each
+// pane last changed, and which tabs the user has renamed by hand. Titles and
+// directories are deliberately absent — they are read from Herdr at the moment
+// a tab is reconciled, so a replayed event cannot make a decision out of a past
+// moment.
+//
+// Panes are indexed both ways, because pane_closed names only the pane.
 type Cache struct {
 	mu      sync.RWMutex
-	tabs    map[string]*TabState
+	tabs    map[string]*tabEntry
 	paneTab map[string]string
 	now     func() time.Time
 }
 
-// NewCache returns an empty cache.
+// tabEntry is one tab's place in the index.
+type tabEntry struct {
+	panes map[string]*paneEntry
+	// manual marks a tab the user renamed by hand. Manual rename detection is
+	// not implemented yet; the flag is honoured wherever it is read.
+	manual bool
+}
+
+type paneEntry struct {
+	// revision is the highest revision seen for this pane. Herdr's revisions
+	// are monotonic, which is what makes a replayed event recognizable.
+	revision  uint64
+	changedAt time.Time
+}
+
+// NewCache returns an empty index.
 func NewCache() *Cache {
 	return &Cache{
-		tabs:    make(map[string]*TabState),
+		tabs:    make(map[string]*tabEntry),
 		paneTab: make(map[string]string),
 		now:     time.Now,
 	}
 }
 
-// Reset replaces the entire cache with a session snapshot. The snapshot is the
-// initial state only; every later change arrives as an event.
-func (c *Cache) Reset(snap herdr.Snapshot) {
+// Reset replaces the index with a session snapshot. The snapshot is the initial
+// state only; every later change arrives as an event.
+func (c *Cache) Reset(tabIDs []string, panes []PaneRef) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.tabs = make(map[string]*TabState, len(snap.Tabs))
-	c.paneTab = make(map[string]string, len(snap.Panes))
+	c.tabs = make(map[string]*tabEntry, len(tabIDs))
+	c.paneTab = make(map[string]string, len(panes))
 
-	for _, tab := range snap.Tabs {
-		c.tabs[tab.TabID] = &TabState{
-			ID:          tab.TabID,
-			WorkspaceID: tab.WorkspaceID,
-			CurrentName: tab.Label,
-			Panes:       make(map[string]*PaneState),
-		}
+	for _, tabID := range tabIDs {
+		c.tabs[tabID] = newTabEntry()
 	}
-	for _, pane := range snap.Panes {
-		c.putPaneLocked(pane)
+	for _, pane := range panes {
+		c.trackLocked(pane)
 	}
 }
 
-// UpsertTab records a tab, preserving the state of one already cached.
-func (c *Cache) UpsertTab(tab herdr.TabInfo) {
+// PaneRef is a pane's identity and revision, which is all the index keeps.
+type PaneRef struct {
+	PaneID   string
+	TabID    string
+	Revision uint64
+}
+
+// AddTab records a tab that has no panes yet.
+func (c *Cache) AddTab(tabID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	existing, ok := c.tabs[tab.TabID]
-	if !ok {
-		c.tabs[tab.TabID] = &TabState{
-			ID:          tab.TabID,
-			WorkspaceID: tab.WorkspaceID,
-			CurrentName: tab.Label,
-			Panes:       make(map[string]*PaneState),
-		}
-		return
+	if _, ok := c.tabs[tabID]; !ok {
+		c.tabs[tabID] = newTabEntry()
 	}
-	existing.WorkspaceID = tab.WorkspaceID
-	existing.CurrentName = tab.Label
 }
 
 // RemoveTab drops a tab and every pane belonging to it.
@@ -78,151 +89,79 @@ func (c *Cache) RemoveTab(tabID string) {
 	if !ok {
 		return
 	}
-	for paneID := range tab.Panes {
+	for paneID := range tab.panes {
 		delete(c.paneTab, paneID)
 	}
 	delete(c.tabs, tabID)
 }
 
-// UpsertPane records pane context and returns the tab it belongs to.
-func (c *Cache) UpsertPane(pane herdr.PaneInfo) (tabID string) {
+// TrackPane records that a pane belongs to a tab and changed just now, and
+// returns the tab that should be reconciled.
+//
+// It returns "" for an update that is older than one already seen. Subscribing
+// replays a backlog of pane updates — roughly the last hundred revisions of
+// each pane, paced at about ten a second — and reconciling every one of them
+// would spend a read on a moment that has already passed.
+func (c *Cache) TrackPane(pane PaneRef) (tabID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.putPaneLocked(pane)
+	return c.trackLocked(pane)
 }
 
-func (c *Cache) putPaneLocked(pane herdr.PaneInfo) string {
-	if pane.TabID == "" || pane.PaneID == "" {
+func (c *Cache) trackLocked(pane PaneRef) string {
+	if pane.PaneID == "" || pane.TabID == "" {
 		return ""
 	}
 
 	// A pane can move between tabs; drop it from the old one first.
 	if oldTabID, ok := c.paneTab[pane.PaneID]; ok && oldTabID != pane.TabID {
 		if old, ok := c.tabs[oldTabID]; ok {
-			delete(old.Panes, pane.PaneID)
+			delete(old.panes, pane.PaneID)
 		}
-	}
-
-	if c.staleLocked(pane) {
-		return ""
 	}
 
 	tab, ok := c.tabs[pane.TabID]
 	if !ok {
-		// Herdr can deliver a pane before its tab; the tab event fills in the
-		// label later.
-		tab = &TabState{
-			ID:          pane.TabID,
-			WorkspaceID: pane.WorkspaceID,
-			Panes:       make(map[string]*PaneState),
-		}
+		// Herdr can deliver a pane before its tab.
+		tab = newTabEntry()
 		c.tabs[pane.TabID] = tab
 	}
 
-	tab.Panes[pane.PaneID] = &PaneState{
-		ID:               pane.PaneID,
-		TabID:            pane.TabID,
-		CWD:              pane.CWD,
-		ForegroundCWD:    pane.ForegroundCWD,
-		TerminalTitle:    pane.TerminalTitleStripped,
-		TerminalTitleRaw: pane.TerminalTitle,
-		Agent:            pane.Agent,
-		DisplayAgent:     pane.DisplayAgent,
-		AgentTitle:       pane.Title,
-		AgentStatus:      pane.AgentStatus,
-		AgentSession:     agentSessionValue(pane.AgentSession),
-		Focused:          pane.Focused,
-		Revision:         pane.Revision,
-		UpdatedAt:        c.now(),
+	entry, ok := tab.panes[pane.PaneID]
+	switch {
+	case !ok:
+		entry = &paneEntry{}
+		tab.panes[pane.PaneID] = entry
+	case pane.Revision < entry.revision:
+		return ""
 	}
-	tab.Revision++
+
+	entry.revision = pane.Revision
+	entry.changedAt = c.now()
 	c.paneTab[pane.PaneID] = pane.TabID
 	return pane.TabID
 }
 
-// staleLocked reports whether a pane update describes a state older than the
-// one already cached.
-//
-// Subscribing replays a bounded backlog of pane updates — roughly the last
-// hundred revisions, paced at about ten a second — before the live ones begin.
-// Applied literally, that walks a tab back through every title its pane ever
-// held: a Neovim pane replays every file it visited, and because the events
-// arrive further apart than the debounce window, the burst cap turns each
-// second of replay into a rename. Revisions are monotonic per pane, so history
-// is recognizable and cheap to drop.
-//
-// Only strictly older revisions are dropped. The replay ends on the current
-// revision, and applying that once more costs nothing: it is the state the
-// cache already holds, and deduplication turns the reconciliation it schedules
-// into a no-op.
-func (c *Cache) staleLocked(pane herdr.PaneInfo) bool {
-	tabID, ok := c.paneTab[pane.PaneID]
-	if !ok {
-		return false
-	}
-	tab, ok := c.tabs[tabID]
-	if !ok {
-		return false
-	}
-	cached, ok := tab.Panes[pane.PaneID]
-	return ok && pane.Revision < cached.Revision
-}
-
-// agentSessionValue extracts the session reference Herdr matched to a pane.
-// The field is nullable, and Auto Title only records the value: no transcript
-// is ever opened.
-func agentSessionValue(session *herdr.AgentSessionInfo) string {
-	if session == nil {
-		return ""
-	}
-	return session.Value
-}
-
-// SetPaneAgent records what pane_agent_detected reported and returns the tab
-// the pane belongs to.
-//
-// The event names only the pane, so the tab comes from the pane index, and it
-// carries no other pane context — the fields it does not mention are left as
-// the last pane update set them.
-func (c *Cache) SetPaneAgent(data herdr.PaneAgentDetectedData) (tabID string) {
+// TouchPane records that a pane changed without saying how, which is what the
+// agent events carry. It returns the tab the pane belongs to.
+func (c *Cache) TouchPane(paneID string) (tabID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	pane, tabID := c.paneLocked(data.PaneID)
-	if pane == nil {
-		return ""
-	}
-
-	if data.Released {
-		// The agent is gone; what it was working on is no longer the truth
-		// about this pane.
-		pane.Agent = ""
-		pane.DisplayAgent = ""
-		pane.AgentTitle = ""
-		pane.AgentSession = ""
-		pane.AgentStatus = herdr.AgentStatusUnknown
-	} else {
-		pane.Agent = data.Agent
-	}
-	pane.UpdatedAt = c.now()
-	return tabID
-}
-
-// paneLocked finds a pane and its tab through the pane index.
-func (c *Cache) paneLocked(paneID string) (*PaneState, string) {
 	tabID, ok := c.paneTab[paneID]
 	if !ok {
-		return nil, ""
+		return ""
 	}
 	tab, ok := c.tabs[tabID]
 	if !ok {
-		return nil, ""
+		return ""
 	}
-	pane, ok := tab.Panes[paneID]
+	entry, ok := tab.panes[paneID]
 	if !ok {
-		return nil, ""
+		return ""
 	}
-	return pane, tabID
+	entry.changedAt = c.now()
+	return tabID
 }
 
 // RemovePane drops a pane and returns the tab it belonged to.
@@ -236,25 +175,37 @@ func (c *Cache) RemovePane(paneID string) (tabID string) {
 	}
 	delete(c.paneTab, paneID)
 	if tab, ok := c.tabs[tabID]; ok {
-		delete(tab.Panes, paneID)
-		tab.Revision++
+		delete(tab.panes, paneID)
 	}
 	return tabID
 }
 
-// Tab returns an independent copy of a tab's state.
-func (c *Cache) Tab(tabID string) (TabState, bool) {
+// Panes lists a tab's panes, each with the time it last changed, in a stable
+// order. The second result is false when the tab is not in the index.
+func (c *Cache) Panes(tabID string) ([]PaneChange, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	tab, ok := c.tabs[tabID]
 	if !ok {
-		return TabState{}, false
+		return nil, false
 	}
-	return tab.Clone(), true
+
+	panes := make([]PaneChange, 0, len(tab.panes))
+	for paneID, entry := range tab.panes {
+		panes = append(panes, PaneChange{PaneID: paneID, ChangedAt: entry.changedAt})
+	}
+	sort.Slice(panes, func(i, j int) bool { return panes[i].PaneID < panes[j].PaneID })
+	return panes, true
 }
 
-// TabIDs lists the cached tabs in a stable order.
+// PaneChange is a pane and when Auto Title last saw it change.
+type PaneChange struct {
+	PaneID    string
+	ChangedAt time.Time
+}
+
+// TabIDs lists the indexed tabs in a stable order.
 func (c *Cache) TabIDs() []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -267,17 +218,6 @@ func (c *Cache) TabIDs() []string {
 	return ids
 }
 
-// SetCurrentName records the label a tab now carries. Keeping this current is
-// what lets reconciliation skip a rename that would be a no-op.
-func (c *Cache) SetCurrentName(tabID, name string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if tab, ok := c.tabs[tabID]; ok {
-		tab.CurrentName = name
-	}
-}
-
 // SetManualName marks or clears a tab as renamed by hand. A tab carrying a
 // manual name is left alone by reconciliation.
 func (c *Cache) SetManualName(tabID string, manual bool) {
@@ -285,16 +225,19 @@ func (c *Cache) SetManualName(tabID string, manual bool) {
 	defer c.mu.Unlock()
 
 	if tab, ok := c.tabs[tabID]; ok {
-		tab.ManualName = manual
+		tab.manual = manual
 	}
 }
 
-// MarkReconciled stamps the time a tab was last reconciled.
-func (c *Cache) MarkReconciled(tabID string, at time.Time) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+// HasManualName reports whether the user renamed this tab by hand.
+func (c *Cache) HasManualName(tabID string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
-	if tab, ok := c.tabs[tabID]; ok {
-		tab.LastReconciledAt = at
-	}
+	tab, ok := c.tabs[tabID]
+	return ok && tab.manual
+}
+
+func newTabEntry() *tabEntry {
+	return &tabEntry{panes: make(map[string]*paneEntry)}
 }

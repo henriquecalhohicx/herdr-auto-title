@@ -30,6 +30,15 @@ Scope is a package or area (`resolver`, `debounce`, `herdr`, `app`).
 - One logical change per commit.
 - Never add a co-author trailer.
 
+## Type rule (mandatory)
+
+**A struct field exists only if code reads it.** Herdr's wire objects carry far
+more than Auto Title needs; mirroring them in full makes a type claim a
+dependency the code does not have, and every unread field is a promise to keep
+something working that nothing exercises. Add a field when the code that reads
+it lands in the same change, and delete a field the moment its last reader goes.
+The same holds for methods, constants and event payload types.
+
 ## Commands
 
 ```sh
@@ -93,6 +102,10 @@ to the README's *Notes on the Herdr socket API*.
 - Development runs against the user's real Herdr session, so **their tab names
   change while you work**. Run the plugin in the foreground, never in the
   background, and check `make ps` when something behaves oddly.
+- **Events are triggers, not data.** An event says which tab may have changed;
+  the tab is then read back with `tab.get` and `pane.get`. Nothing from an event
+  payload is stored beyond pane identity and revision — Herdr replays a backlog
+  on subscribe, so a payload describes a past moment.
 - Never pass terminal-derived values to a shell. Renames go over the socket API.
 - The full workflow is in [docs/development.md](docs/development.md); the
   architecture and configuration are in [README.md](README.md).

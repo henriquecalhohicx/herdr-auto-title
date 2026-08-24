@@ -11,7 +11,7 @@ import (
 // tabWithPane builds a one-pane tab from a pane the test set up.
 func tabWithPane(pane *state.PaneState) state.TabState {
 	pane.ID = "wE:p1"
-	pane.TabID = "wE:t1"
+	_ = pane
 	pane.Focused = true
 	return state.TabState{
 		ID:    "wE:t1",

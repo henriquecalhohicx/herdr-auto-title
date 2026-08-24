@@ -14,7 +14,7 @@ func tabWithCWD(dir string) state.TabState {
 	return state.TabState{
 		ID: "wE:t1",
 		Panes: map[string]*state.PaneState{
-			"wE:p1": {ID: "wE:p1", TabID: "wE:t1", CWD: dir, Focused: true},
+			"wE:p1": {ID: "wE:p1", CWD: dir, Focused: true},
 		},
 	}
 }

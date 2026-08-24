@@ -46,13 +46,16 @@ Herdr socket (NDJSON)
   socket reader ──► event channel ──► event router
                                           │
                                           ▼
-                                     state cache
+                                    session index
                                           │
                                           ▼
                                  per-tab debounce (200ms)
                                           │
                                           ▼
                               bounded reconciliation workers
+                                          │
+                                          ▼
+                          read the tab: tab.get + pane.get
                                           │
                                           ▼
                                   deterministic resolver
@@ -67,11 +70,21 @@ Herdr socket (NDJSON)
 Auto Title reacts to changes in terminal context; it does not continuously try
 to understand the terminal. There is no polling loop and no scrollback scanning.
 
-- **Bootstrap.** On connect it calls `session.snapshot` once to seed the cache,
-  subscribes to events, and reconciles the tabs that already exist. The snapshot
-  is the initial state only; everything after it arrives as an event.
+- **Bootstrap.** On connect it subscribes to events, calls `session.snapshot`
+  once to seed the index, and reconciles the tabs that already exist.
+- **Events are triggers, not data.** An event says which tab may have changed
+  and nothing more. Subscribing makes Herdr replay a backlog — roughly the last
+  hundred revisions of every pane, about ten a second — so a payload describes
+  some past moment, and a title built from one would name a tab after a file the
+  user closed minutes ago. Only pane identity and revision are kept; the
+  revision is what makes a replayed event recognizable and cheap to ignore.
+- **Read before deciding.** When a tab's timer fires, its state is read back
+  with `tab.get` and one `pane.get` per pane. That read is the only source of a
+  title, so a stale trigger can cost a redundant read and nothing worse. It also
+  supplies the tab's real current label, which is what deduplication compares
+  against.
 - **Router.** The socket reader never does expensive work. Events go through a
-  channel to a router that updates the cache and arms a timer.
+  channel to a router that updates the index and arms a timer.
 - **Debounce.** Each tab has its own 200 ms timer. A burst of events on one tab
   produces exactly one reconciliation once the burst settles; tabs never block
   each other. A burst can also be *endless* — a pane running an agent emits an
@@ -239,10 +252,15 @@ Verified against Herdr 0.8.2, protocol 20:
 - `agent_status` is one of `idle`, `working`, `blocked`, `done`, `unknown`. Every
   pane carries one; a pane with no agent reports `unknown`.
 - On subscribe, Herdr replays a backlog of pane updates before the live ones —
-  measured at roughly the last 95 revisions of a pane, delivered about ten a
-  second — and `events.subscribe` offers no way to opt out. Pane revisions are
-  monotonic, so the cache recognizes the backlog and drops every update older
-  than the one it already holds.
+  measured at roughly the last 95 revisions **per pane**, delivered about ten a
+  second, so the drain costs about ten seconds for every active pane. Live
+  events queue behind it: a change made two seconds after subscribing was
+  observed arriving thirteen seconds later. `events.subscribe` offers no way to
+  opt out — its only parameter is the subscription list, event envelopes carry
+  no timestamp or sequence number, and no method exposes a cursor. This is why
+  events are treated as triggers and state is read on demand.
+- `tab.get` and `pane.get` read one object each and answer with the present.
+  `pane.list` filters by workspace only, not by tab.
 - A malformed request is answered with an uncorrelated error frame and the
   connection is then closed.
 

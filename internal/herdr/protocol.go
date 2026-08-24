@@ -50,6 +50,9 @@ func (e *APIError) Error() string {
 const (
 	// CodeTabNotFound is returned when a tab has closed since it was cached.
 	CodeTabNotFound = "tab_not_found"
+	// CodePaneNotFound is the same for a pane. Both are expected: a tab or a
+	// pane can close between an event naming it and the read that follows.
+	CodePaneNotFound = "pane_not_found"
 )
 
 // ErrorCode returns the Herdr error code carried by err, or "" if err is not a
@@ -68,6 +71,8 @@ const (
 	MethodSessionSnapshot = "session.snapshot"
 	MethodEventsSubscribe = "events.subscribe"
 	MethodTabRename       = "tab.rename"
+	MethodTabGet          = "tab.get"
+	MethodPaneGet         = "pane.get"
 )
 
 // Subscription selects one event stream. Subscription types use dot notation
@@ -101,6 +106,15 @@ type subscribeParams struct {
 type TabRenameParams struct {
 	TabID string `json:"tab_id"`
 	Label string `json:"label"`
+}
+
+// TabTarget and PaneTarget name the object a read applies to.
+type TabTarget struct {
+	TabID string `json:"tab_id"`
+}
+
+type PaneTarget struct {
+	PaneID string `json:"pane_id"`
 }
 
 // emptyParams is the parameter object for methods that take none.

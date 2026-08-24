@@ -18,9 +18,12 @@ type RenameCall struct {
 type FakeClient struct {
 	mu            sync.Mutex
 	snapshot      Snapshot
+	tabs          map[string]TabInfo
+	panes         map[string]PaneInfo
 	renames       []RenameCall
 	subscriptions []Subscription
 	renameErr     error
+	readErr       error
 	closed        bool
 
 	events chan Event
@@ -32,10 +35,67 @@ var _ Client = (*FakeClient)(nil)
 // NewFake returns a client that answers session.snapshot with the given
 // snapshot.
 func NewFake(snapshot Snapshot) *FakeClient {
-	return &FakeClient{
+	f := &FakeClient{
 		snapshot: snapshot,
+		tabs:     make(map[string]TabInfo, len(snapshot.Tabs)),
+		panes:    make(map[string]PaneInfo, len(snapshot.Panes)),
 		events:   make(chan Event, 128),
 	}
+	for _, tab := range snapshot.Tabs {
+		f.tabs[tab.TabID] = tab
+	}
+	for _, pane := range snapshot.Panes {
+		f.panes[pane.PaneID] = pane
+	}
+	return f
+}
+
+// UpdatePane stores a pane's new state and announces it, the way Herdr does:
+// the event says a pane changed, and a read is what reveals how.
+func (f *FakeClient) UpdatePane(pane PaneInfo) {
+	f.SetPane(pane)
+	f.Emit(EventPaneUpdated, PaneUpdatedData{Pane: pane})
+}
+
+// SetPane changes what a read of this pane will answer, without announcing it.
+func (f *FakeClient) SetPane(pane PaneInfo) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.panes[pane.PaneID] = pane
+}
+
+// CreateTab stores a new tab and announces it, the way Herdr does.
+func (f *FakeClient) CreateTab(tab TabInfo) {
+	f.SetTab(tab)
+	f.Emit(EventTabCreated, TabCreatedData{Tab: tab})
+}
+
+// SetTab changes what a read of this tab will answer.
+func (f *FakeClient) SetTab(tab TabInfo) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.tabs[tab.TabID] = tab
+}
+
+// ClosePane makes subsequent reads of the pane fail as Herdr's would.
+func (f *FakeClient) ClosePane(paneID string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.panes, paneID)
+}
+
+// CloseTab makes subsequent reads of the tab fail as Herdr's would.
+func (f *FakeClient) CloseTab(tabID string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.tabs, tabID)
+}
+
+// SetReadError makes subsequent tab.get and pane.get calls fail.
+func (f *FakeClient) SetReadError(err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.readErr = err
 }
 
 // Emit delivers one event as if Herdr had broadcast it.
@@ -104,6 +164,44 @@ func (f *FakeClient) Call(ctx context.Context, method string, params any, result
 		}
 		return fmt.Errorf("fake client: unexpected result type for %s", method)
 
+	case MethodTabGet:
+		if f.readErr != nil {
+			return f.readErr
+		}
+		target, ok := params.(TabTarget)
+		if !ok {
+			return fmt.Errorf("fake client: unexpected params for %s", method)
+		}
+		tab, ok := f.tabs[target.TabID]
+		if !ok {
+			return &APIError{Code: CodeTabNotFound, Message: "tab " + target.TabID + " not found"}
+		}
+		res, ok := result.(*tabInfoResult)
+		if !ok {
+			return fmt.Errorf("fake client: unexpected result type for %s", method)
+		}
+		res.Tab = tab
+		return nil
+
+	case MethodPaneGet:
+		if f.readErr != nil {
+			return f.readErr
+		}
+		target, ok := params.(PaneTarget)
+		if !ok {
+			return fmt.Errorf("fake client: unexpected params for %s", method)
+		}
+		pane, ok := f.panes[target.PaneID]
+		if !ok {
+			return &APIError{Code: CodePaneNotFound, Message: "pane " + target.PaneID + " not found"}
+		}
+		res, ok := result.(*paneInfoResult)
+		if !ok {
+			return fmt.Errorf("fake client: unexpected result type for %s", method)
+		}
+		res.Pane = pane
+		return nil
+
 	case MethodTabRename:
 		if f.renameErr != nil {
 			return f.renameErr
@@ -112,6 +210,13 @@ func (f *FakeClient) Call(ctx context.Context, method string, params any, result
 		if !ok {
 			return fmt.Errorf("fake client: unexpected params for %s", method)
 		}
+		if _, ok := f.tabs[rename.TabID]; !ok {
+			return &APIError{Code: CodeTabNotFound, Message: "tab " + rename.TabID + " not found"}
+		}
+		// Herdr's label really does change, so a later read must agree.
+		tab := f.tabs[rename.TabID]
+		tab.Label = rename.Label
+		f.tabs[rename.TabID] = tab
 		f.renames = append(f.renames, RenameCall{TabID: rename.TabID, Label: rename.Label})
 		return nil
 
