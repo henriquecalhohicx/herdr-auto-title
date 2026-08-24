@@ -58,3 +58,33 @@ func TestMeaningful(t *testing.T) {
 		})
 	}
 }
+
+func TestAShellPromptIsNotAnActivity(t *testing.T) {
+	// A shell titling its window after its prompt says who and where, which the
+	// context already says, and never says what the user is doing. Remote
+	// shells do it most, which is how it reaches a tab named after a host.
+	for _, title := range []string{
+		"root@psi:",
+		"alex@macbook:~/work",
+		"deploy@prod-01:/var/log",
+		"root@psi:~",
+	} {
+		if got, ok := Meaningful(title); ok {
+			t.Errorf("Meaningful(%q) = %q, want it rejected", title, got)
+		}
+	}
+}
+
+func TestValuesThatOnlyLookLikePromptsSurvive(t *testing.T) {
+	// The pattern must not swallow real work that happens to contain an @.
+	for _, title := range []string{
+		"Fix auth@v2: rewrite the guard",
+		"deploy@prod-01",
+		"npm run build:prod",
+		"user@host",
+	} {
+		if _, ok := Meaningful(title); !ok {
+			t.Errorf("Meaningful(%q) rejected a meaningful value", title)
+		}
+	}
+}

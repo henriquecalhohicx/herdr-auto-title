@@ -32,6 +32,15 @@ var genericValues = map[string]struct{}{
 // uriPattern matches a scheme-qualified location such as oil:///home/dev.
 var uriPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*://`)
 
+// promptPattern matches the title a shell sets from its own prompt:
+// `root@psi:`, `alex@macbook:~/work`, `deploy@prod-01:/var/log`.
+//
+// It is the same kind of value as a bare `~` — it says who and where, which the
+// tab's context already says, and never says what the user is doing. Remote
+// shells set it most often, which is how it reaches a tab that is otherwise
+// named after a host.
+var promptPattern = regexp.MustCompile(`^[^\s@]+@[^\s@:]+:\S*$`)
+
 // punctuation wraps and joins words inside titles such as
 // `Makefile (~/work/dashboard) - Nvim`.
 const punctuation = `()[]{}<>"'` + ",;:-–—|"
@@ -39,7 +48,8 @@ const punctuation = `()[]{}<>"'` + ",;:-–—|"
 // Meaningful cleans an untrusted value for use as part of a title and reports
 // whether anything useful survived.
 //
-// Cleaning removes locations. Editors title their window with the path of the
+// Cleaning removes locations, and a value that is nothing but a shell prompt is
+// rejected outright. Editors title their window with the path of the
 // file they hold — `auth.ts (~/work/dashboard/src) - Nvim` — and the context
 // half of a title already says where the user is, so the path is both redundant
 // and long enough to push the useful part past the length limit. What remains,
@@ -53,6 +63,9 @@ func Meaningful(value string) (string, bool) {
 		return "", false
 	}
 	if _, generic := genericValues[strings.ToLower(cleaned)]; generic {
+		return "", false
+	}
+	if promptPattern.MatchString(cleaned) {
 		return "", false
 	}
 	return cleaned, true

@@ -117,7 +117,9 @@ editor titling its window `auth.ts (~/work/dashboard/src) - Nvim` contributes
 `auth.ts - Nvim`; a shell titling it `~` contributes nothing. Relative paths
 survive, so `Fix bug in src/auth.ts` stays intact. On top of that, a value that
 only names a program or a shell — `zsh`, `node`, `Claude Code`, `Agent` — is
-rejected outright. An agent that echoes its own name is rejected too, whatever
+rejected outright, as is one that is nothing but a shell prompt: `root@psi:`,
+`alex@macbook:~/work`. A prompt says who and where, which the context has
+already said, and never says what the user is doing. An agent that echoes its own name is rejected too, whatever
 that name is: it is compared against the agent Herdr recognized in the pane
 rather than against the table.
 
