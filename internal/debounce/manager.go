@@ -9,13 +9,16 @@ import (
 // DefaultDelay is how long a key stays quiet before its action runs.
 const DefaultDelay = 200 * time.Millisecond
 
-// DefaultMaxWait caps how long rearming can hold an action back.
+// MaxWaitFactor turns a quiet window into a cap on how long rearming can hold
+// an action back: an action always runs within delay × MaxWaitFactor of the
+// first event in a burst.
 //
 // A pane running an agent emits updates every ~100ms for as long as the agent
-// is working. Pure debouncing would rearm that tab's timer forever and it would
-// never be titled at all, so an action always runs within MaxWait of the first
-// event in a burst.
-const DefaultMaxWait = time.Second
+// is working. Pure debouncing would rearm that tab's timer forever and the tab
+// would never be titled at all. Deriving the cap from the window rather than
+// fixing it means raising the window to calm a noisy pane raises the cap too,
+// instead of the cap overriding the setting.
+const MaxWaitFactor = 5
 
 // Manager keeps one independent timer per key. Rearming a key cancels its
 // pending timer, so a burst of events on one key produces exactly one action

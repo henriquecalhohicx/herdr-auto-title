@@ -2,39 +2,58 @@ package resolver
 
 import "testing"
 
-func TestIsGeneric(t *testing.T) {
+func TestMeaningful(t *testing.T) {
 	tests := []struct {
 		name  string
 		value string
-		want  bool
+		want  string
+		ok    bool
 	}{
-		{"shell name", "zsh", true},
-		{"shell name in another case", "ZSH", true},
-		{"multi-word program name", "Claude Code", true},
-		{"multi-word program name in another case", "claude code", true},
-		{"runtime name", "node", true},
-		{"surrounded by whitespace", "  bash  ", true},
-		{"empty", "", true},
-		{"whitespace only", "   ", true},
-		{"home directory", "~", true},
-		{"abbreviated path", "~/W/herdr-auto-title", true},
-		{"absolute path", "/Users/dev/work/dashboard", true},
-		{"work described in words", "Fix OAuth redirect", false},
-		{"file name", "auth.ts", false},
-		{"host name", "prod-01", false},
-		// Observed live: editor titles carry the path and change on every
-		// buffer switch, which renamed a tab five times in six seconds.
-		{"editor title carrying a home path", "main.go (~/work/dashboard) - Nvim", true},
-		{"editor title carrying a uri", "- (oil:///home/dev/work/dashboard) - Nvim", true},
-		{"absolute path inside a sentence", "editing /etc/hosts", true},
-		{"relative path inside a sentence", "Fix bug in src/auth.ts", false},
-		{"word that merely contains a shell name", "bashful", false},
+		{"work described in words", "Fix OAuth redirect", "Fix OAuth redirect", true},
+		{"file name", "auth.ts", "auth.ts", true},
+		{"host name", "prod-01", "prod-01", true},
+		{"relative path inside a sentence", "Fix bug in src/auth.ts", "Fix bug in src/auth.ts", true},
+
+		{"shell name", "zsh", "", false},
+		{"shell name in another case", "ZSH", "", false},
+		{"multi-word program name", "Claude Code", "", false},
+		{"runtime name", "node", "", false},
+		{"surrounded by whitespace", "  bash  ", "", false},
+		{"empty", "", "", false},
+		{"whitespace only", "   ", "", false},
+		{"word that merely contains a shell name", "bashful", "bashful", true},
+
+		{"home directory", "~", "", false},
+		{"abbreviated path", "~/W/herdr-auto-title", "", false},
+		{"absolute path", "/Users/dev/work/dashboard", "", false},
+
+		// Every one of these was observed on a live session.
+		{
+			"editor title carrying a home path",
+			"auth.provider.ts (~/Work/self-care-portal/libs/shared-api/src) - Nvim",
+			"auth.provider.ts - Nvim", true,
+		},
+		{
+			"editor title for a file at the repository root",
+			"LICENSE (~/Work/herdr-auto-title) - Nvim",
+			"LICENSE - Nvim", true,
+		},
+		{
+			"editor title carrying a uri",
+			"- (oil:///Users/dev/Work/herdr-auto-title) - Nvim",
+			"Nvim", true,
+		},
+		{"absolute path inside a sentence", "editing /etc/hosts", "editing", true},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := IsGeneric(tc.value); got != tc.want {
-				t.Errorf("IsGeneric(%q) = %v, want %v", tc.value, got, tc.want)
+			got, ok := Meaningful(tc.value)
+			if ok != tc.ok {
+				t.Fatalf("Meaningful(%q) ok = %v, want %v", tc.value, ok, tc.ok)
+			}
+			if got != tc.want {
+				t.Errorf("Meaningful(%q) = %q, want %q", tc.value, got, tc.want)
 			}
 		})
 	}

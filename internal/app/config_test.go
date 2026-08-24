@@ -26,8 +26,8 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.MaxLength != resolver.DefaultMaxLength {
 		t.Errorf("max length = %d, want %d", cfg.MaxLength, resolver.DefaultMaxLength)
 	}
-	if cfg.MaxWait != debounce.DefaultMaxWait {
-		t.Errorf("max wait = %s, want %s", cfg.MaxWait, debounce.DefaultMaxWait)
+	if want := debounce.DefaultDelay * debounce.MaxWaitFactor; cfg.MaxWait != want {
+		t.Errorf("max wait = %s, want %s", cfg.MaxWait, want)
 	}
 }
 
@@ -48,6 +48,10 @@ func TestLoadConfigFromEnvironment(t *testing.T) {
 	}
 	if cfg.MaxLength != 32 {
 		t.Errorf("max length = %d, want 32", cfg.MaxLength)
+	}
+	// Raising the window must raise the cap with it.
+	if cfg.MaxWait != 2500*time.Millisecond {
+		t.Errorf("max wait = %s, want 2.5s", cfg.MaxWait)
 	}
 }
 

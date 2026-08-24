@@ -141,20 +141,36 @@ func TestTerminalTitleWithNothingElse(t *testing.T) {
 	}
 }
 
-func TestEditorTitleDoesNotWin(t *testing.T) {
-	// Both were observed on a live session, one second apart, on the same pane.
-	for _, title := range []string{
-		"Makefile (~/Work/herdr-auto-title) - Nvim",
-		"- (oil:///Users/dev/Work/herdr-auto-title) - Nvim",
-	} {
-		t.Run(title, func(t *testing.T) {
+func TestEditorTitleKeepsTheFileAndDropsThePath(t *testing.T) {
+	// All three were observed on a live session.
+	tests := []struct {
+		title string
+		want  string
+	}{
+		{
+			"Makefile (~/Work/herdr-auto-title) - Nvim",
+			"herdr-auto-title · Makefile - Nvim",
+		},
+		{
+			"03-terminal-title-source.md (~/Work/herdr-auto-title/docs/issues) - Nvim",
+			"herdr-auto-title · 03-terminal-title-source.md - Nvim",
+		},
+		{
+			// A file browser buffer names no file, so only the editor is left.
+			"- (oil:///Users/dev/Work/herdr-auto-title) - Nvim",
+			"herdr-auto-title · Nvim",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.title, func(t *testing.T) {
 			got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(&state.PaneState{
 				CWD:           "/Users/dev/Work/herdr-auto-title",
-				TerminalTitle: title,
+				TerminalTitle: tc.title,
 			}))
 
-			if got.Name != "herdr-auto-title" {
-				t.Errorf("name = %q, want %q", got.Name, "herdr-auto-title")
+			if got.Name != tc.want {
+				t.Errorf("name = %q, want %q", got.Name, tc.want)
 			}
 		})
 	}

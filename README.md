@@ -76,8 +76,10 @@ to understand the terminal. There is no polling loop and no scrollback scanning.
   produces exactly one reconciliation once the burst settles; tabs never block
   each other. A burst can also be *endless* — a pane running an agent emits an
   update roughly every 100 ms for as long as the agent works — so an action
-  always runs within one second of the first event, however long the burst
-  lasts. Without that cap such a tab would never be titled at all.
+  always runs within five debounce windows of the first event, however long the
+  burst lasts. Without that cap such a tab would never be titled at all. Raising
+  `HERDR_AUTO_TITLE_DEBOUNCE_MS` raises the cap with it, which is the way to
+  calm a tab that renames more often than you would like.
 - **Resolver.** Deterministic — identical state always yields an identical
   title. Every candidate value is treated as untrusted input.
 - **Deduplication.** If the resolved title equals the tab's current title, no
@@ -102,13 +104,15 @@ one.
 | 7 | Working directory | **implemented** |
 | 8 | Generic fallback (`Shell`) | **implemented** |
 
-A source is skipped when its value is too generic to mean anything: a shell or
-program name (`zsh`, `node`, `Claude Code`), or anything carrying a location —
-an absolute path, a home-anchored path, a URI. The context half of a title
-already says where the user is, and titles that repeat it change with every
-keystroke: an editor titling its window `Makefile (~/work/dashboard) - Nvim`
-renamed a tab five times in six seconds before that rule existed. Relative paths
-still count as meaningful, so `Fix bug in src/auth.ts` survives.
+A value is cleaned before it becomes part of a title, and a source declines when
+nothing useful survives. Cleaning removes locations — absolute paths,
+home-anchored paths, URIs — because the context half already says where the user
+is, and a path is long enough to push the useful part past the length limit. An
+editor titling its window `auth.ts (~/work/dashboard/src) - Nvim` contributes
+`auth.ts - Nvim`; a shell titling it `~` contributes nothing. Relative paths
+survive, so `Fix bug in src/auth.ts` stays intact. On top of that, a value that
+only names a program or a shell — `zsh`, `node`, `Claude Code` — is rejected
+outright.
 
 Every value that reaches a title — a directory name, a terminal title, an agent
 title later — is stripped of ANSI escapes and control characters, whitespace
@@ -124,7 +128,7 @@ an unusable value is logged as a warning and the default is kept.
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `HERDR_AUTO_TITLE_DEBUG` | `false` | Log at DEBUG instead of INFO |
-| `HERDR_AUTO_TITLE_DEBOUNCE_MS` | `200` | Per-tab debounce window |
+| `HERDR_AUTO_TITLE_DEBOUNCE_MS` | `200` | Per-tab debounce window; the cap on a continuous burst is five times this |
 | `HERDR_AUTO_TITLE_MAX_LENGTH` | `64` | Maximum title length in characters |
 
 Auto Title logs to stderr through `log/slog`. Raw terminal output and command
@@ -142,8 +146,13 @@ confirm the subscription is live; `title unchanged` means the resolver produced
 exactly the title the tab already has.
 
 **A busy tab is titled a second late.**
-Reconciliation for a continuously updating pane runs on the one-second cap
-rather than on the 200 ms quiet window. That is the cap doing its job.
+Reconciliation for a continuously updating pane runs on the cap — five debounce
+windows, one second by default — rather than on the quiet window. That is the
+cap doing its job.
+
+**A tab renames every time I switch files in my editor.**
+Expected: the tab follows the editor's title, which follows the buffer. Raise
+`HERDR_AUTO_TITLE_DEBOUNCE_MS` to slow it down.
 
 **A tab keeps the name I gave it.**
 That is intended once manual rename protection lands. In this slice Auto Title

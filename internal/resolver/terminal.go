@@ -27,9 +27,9 @@ func (TerminalTitle) Resolve(pane *state.PaneState) (Parts, bool) {
 	}
 
 	// Truncation belongs to the assembled name, so no limit is applied here.
-	title = Sanitize(title, 0)
-	if IsGeneric(title) {
+	activity, ok := Meaningful(Sanitize(title, 0))
+	if !ok {
 		return Parts{}, false
 	}
-	return Parts{Activity: title, Confidence: ConfidenceTerminalTitle}, true
+	return Parts{Activity: activity, Confidence: ConfidenceTerminalTitle}, true
 }

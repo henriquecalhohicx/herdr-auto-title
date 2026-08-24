@@ -31,7 +31,6 @@ type Config struct {
 func LoadConfig() (Config, []string) {
 	cfg := Config{
 		Debounce:  debounce.DefaultDelay,
-		MaxWait:   debounce.DefaultMaxWait,
 		MaxLength: resolver.DefaultMaxLength,
 	}
 	var warnings []string
@@ -68,6 +67,10 @@ func LoadConfig() (Config, []string) {
 			cfg.MaxLength = length
 		}
 	}
+
+	// The cap follows the window, so raising the window calms a noisy pane
+	// instead of being overridden.
+	cfg.MaxWait = cfg.Debounce * debounce.MaxWaitFactor
 
 	return cfg, warnings
 }
