@@ -74,8 +74,11 @@ listed here** (`make probe-*`, `scripts/probe.py`).
   pane observed; that agent reports its topic through `terminal_title_stripped`.
 - `agent_status` is `idle | working | blocked | done | unknown`; a pane with no
   agent reports `unknown`.
-- Subscribing replays recent pane events before the live ones, so the same
-  revisions arrive again on every new subscription.
+- Subscribing **replays a backlog** of pane updates before the live ones:
+  measured at roughly the last 95 revisions of a pane, paced at ~10 a second.
+  They arrive further apart than the debounce window, so without filtering the
+  burst cap turns each second of replay into a rename. Pane revisions are
+  monotonic, so the cache drops updates older than the one it holds.
 - `PaneInfo` carries no foreground process name; that needs `pane.process_info`.
 - `pane_closed` names only the pane, not its tab — the cache indexes panes by ID.
 

@@ -238,9 +238,11 @@ Verified against Herdr 0.8.2, protocol 20:
   `final_status` and `released` — like `pane_closed` it does not name the tab.
 - `agent_status` is one of `idle`, `working`, `blocked`, `done`, `unknown`. Every
   pane carries one; a pane with no agent reports `unknown`.
-- On subscribe, Herdr replays recent pane events before the live ones, so the
-  same revisions arrive again on every new subscription. Cache updates are
-  idempotent, and the replay costs one extra reconciliation per tab.
+- On subscribe, Herdr replays a backlog of pane updates before the live ones —
+  measured at roughly the last 95 revisions of a pane, delivered about ten a
+  second — and `events.subscribe` offers no way to opt out. Pane revisions are
+  monotonic, so the cache recognizes the backlog and drops every update older
+  than the one it already holds.
 - A malformed request is answered with an uncorrelated error frame and the
   connection is then closed.
 

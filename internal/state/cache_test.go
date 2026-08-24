@@ -241,3 +241,60 @@ func TestSetPaneAgentOnAnUnknownPane(t *testing.T) {
 		t.Fatalf("returned tab %q for a pane that was never cached", got)
 	}
 }
+
+func TestReplayedPaneUpdatesAreDropped(t *testing.T) {
+	// Subscribing replays a backlog of old revisions. Applying them would walk
+	// the tab back through every title the pane ever held.
+	c := NewCache()
+	c.Reset(herdr.Snapshot{
+		Tabs:  []herdr.TabInfo{{TabID: "wE:t1", Label: "1"}},
+		Panes: []herdr.PaneInfo{{PaneID: "wE:p1", TabID: "wE:t1", Revision: 1122, TerminalTitleStripped: "watch.sh"}},
+	})
+
+	for _, revision := range []uint64{1028, 1064, 1121} {
+		if got := c.UpsertPane(herdr.PaneInfo{
+			PaneID: "wE:p1", TabID: "wE:t1", Revision: revision, TerminalTitleStripped: "cache.go",
+		}); got != "" {
+			t.Errorf("revision %d scheduled tab %q, want no reconciliation", revision, got)
+		}
+	}
+
+	tab, _ := c.Tab("wE:t1")
+	if got := tab.Panes["wE:p1"].TerminalTitle; got != "watch.sh" {
+		t.Errorf("terminal title = %q, want watch.sh", got)
+	}
+}
+
+func TestTheCurrentRevisionIsStillApplied(t *testing.T) {
+	// The replay ends on the revision the cache already holds; reapplying it is
+	// harmless and keeps a pane update that bumps nothing from being lost.
+	c := NewCache()
+	c.UpsertPane(herdr.PaneInfo{PaneID: "wE:p1", TabID: "wE:t1", Revision: 7, TerminalTitleStripped: "old"})
+
+	if got := c.UpsertPane(herdr.PaneInfo{
+		PaneID: "wE:p1", TabID: "wE:t1", Revision: 7, TerminalTitleStripped: "new",
+	}); got != "wE:t1" {
+		t.Fatalf("scheduled tab %q, want wE:t1", got)
+	}
+
+	tab, _ := c.Tab("wE:t1")
+	if got := tab.Panes["wE:p1"].TerminalTitle; got != "new" {
+		t.Errorf("terminal title = %q, want new", got)
+	}
+}
+
+func TestNewerRevisionsAreApplied(t *testing.T) {
+	c := NewCache()
+	c.UpsertPane(herdr.PaneInfo{PaneID: "wE:p1", TabID: "wE:t1", Revision: 7, TerminalTitleStripped: "old"})
+
+	if got := c.UpsertPane(herdr.PaneInfo{
+		PaneID: "wE:p1", TabID: "wE:t1", Revision: 8, TerminalTitleStripped: "new",
+	}); got != "wE:t1" {
+		t.Fatalf("scheduled tab %q, want wE:t1", got)
+	}
+
+	tab, _ := c.Tab("wE:t1")
+	if got := tab.Panes["wE:p1"].TerminalTitle; got != "new" {
+		t.Errorf("terminal title = %q, want new", got)
+	}
+}

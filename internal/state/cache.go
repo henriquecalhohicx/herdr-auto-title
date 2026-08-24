@@ -103,6 +103,10 @@ func (c *Cache) putPaneLocked(pane herdr.PaneInfo) string {
 		}
 	}
 
+	if c.staleLocked(pane) {
+		return ""
+	}
+
 	tab, ok := c.tabs[pane.TabID]
 	if !ok {
 		// Herdr can deliver a pane before its tab; the tab event fills in the
@@ -134,6 +138,34 @@ func (c *Cache) putPaneLocked(pane herdr.PaneInfo) string {
 	tab.Revision++
 	c.paneTab[pane.PaneID] = pane.TabID
 	return pane.TabID
+}
+
+// staleLocked reports whether a pane update describes a state older than the
+// one already cached.
+//
+// Subscribing replays a bounded backlog of pane updates — roughly the last
+// hundred revisions, paced at about ten a second — before the live ones begin.
+// Applied literally, that walks a tab back through every title its pane ever
+// held: a Neovim pane replays every file it visited, and because the events
+// arrive further apart than the debounce window, the burst cap turns each
+// second of replay into a rename. Revisions are monotonic per pane, so history
+// is recognizable and cheap to drop.
+//
+// Only strictly older revisions are dropped. The replay ends on the current
+// revision, and applying that once more costs nothing: it is the state the
+// cache already holds, and deduplication turns the reconciliation it schedules
+// into a no-op.
+func (c *Cache) staleLocked(pane herdr.PaneInfo) bool {
+	tabID, ok := c.paneTab[pane.PaneID]
+	if !ok {
+		return false
+	}
+	tab, ok := c.tabs[tabID]
+	if !ok {
+		return false
+	}
+	cached, ok := tab.Panes[pane.PaneID]
+	return ok && pane.Revision < cached.Revision
 }
 
 // agentSessionValue extracts the session reference Herdr matched to a pane.
