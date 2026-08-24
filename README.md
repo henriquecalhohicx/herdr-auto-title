@@ -104,7 +104,7 @@ one.
 | 3 | Meaningful terminal title | **implemented** |
 | 4 | Known foreground process | later slice |
 | 5 | SSH session | later slice |
-| 6 | Git context | later slice |
+| 6 | Git context | **implemented** |
 | 7 | Working directory | **implemented** |
 | 8 | Agent name | **implemented** |
 | 9 | Generic fallback (`Shell`) | **implemented** |
@@ -131,6 +131,21 @@ was null for every Claude Code pane observed — and the agent expresses what it
 working on through the terminal title instead. The agent source is what reads the
 field when an agent does set it; in practice most agent context arrives one rung
 lower, through the terminal title.
+
+Inside a repository the branch becomes the activity, so a tab reads
+`dashboard · MC-13200`. `main` and `master` are dropped: a tab on the trunk of
+the repository it is named after learns nothing from being told so. Conventional
+namespaces go too — `feature/MC-13200` contributes `MC-13200` — because every
+branch in the repository carries the same one.
+
+The lookup never runs in the poll loop. Each poll answers from a cache and
+starts a background refresh when its reading is missing or older than three
+seconds, so a directory contributes no branch on the poll that first sees it and
+its branch from then on. A stale reading is used while the refresh runs, so a
+checkout takes a moment to show rather than making the tab flicker back to its
+bare directory name. git is executed directly with arguments, never through a
+shell, and no repository, a detached HEAD, a missing git and a timed-out lookup
+are all simply "no branch".
 
 An agent has no topic to report the moment it starts, and Claude Code titles its
 window `Claude Code` until the conversation has a subject. That name is generic

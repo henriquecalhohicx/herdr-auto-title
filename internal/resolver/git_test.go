@@ -1,0 +1,411 @@
+package resolver
+
+import (
+	"context"
+	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"herdr-auto-title/internal/state"
+)
+
+// stubGit builds a Git source answering from a fixed table, so every outcome is
+// reachable without a repository on disk.
+func stubGit(branches map[string]string) *Git {
+	g := &Git{
+		ttl:     GitTTL,
+		timeout: GitTimeout,
+		entries: make(map[string]*gitEntry),
+	}
+	g.lookup = func(_ context.Context, dir string) (string, bool) {
+		branch, ok := branches[dir]
+		return branch, ok
+	}
+	return g
+}
+
+// awaitLookup resolves once to start the background lookup, then waits for it
+// to land. It works for outcomes that produce no branch, which polling until a
+// branch appears cannot.
+func awaitLookup(t *testing.T, g *Git, pane *state.PaneState) {
+	t.Helper()
+	g.Resolve(pane)
+
+	dir := pane.CWD
+	if dir == "" {
+		dir = pane.ForegroundCWD
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		g.mu.Lock()
+		entry, ok := g.entries[dir]
+		done := ok && !entry.inFlight && !entry.readAt.IsZero()
+		g.mu.Unlock()
+		if done {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the lookup for %s never landed", dir)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// awaitBranch waits for the lookup and returns what the source then reports.
+func awaitBranch(t *testing.T, g *Git, pane *state.PaneState) (Parts, bool) {
+	t.Helper()
+	awaitLookup(t, g, pane)
+	return g.Resolve(pane)
+}
+
+func TestBranchBecomesTheActivity(t *testing.T) {
+	g := stubGit(map[string]string{"/Users/dev/work/dashboard": "MC-13200"})
+	pane := &state.PaneState{CWD: "/Users/dev/work/dashboard"}
+
+	parts, ok := awaitBranch(t, g, pane)
+	if !ok {
+		t.Fatal("the branch never arrived")
+	}
+	if parts.Activity != "MC-13200" {
+		t.Errorf("activity = %q, want MC-13200", parts.Activity)
+	}
+	if parts.Context != "" {
+		t.Errorf("context = %q, want the directory source to supply it", parts.Context)
+	}
+	if parts.Confidence != ConfidenceGit {
+		t.Errorf("confidence = %d, want %d", parts.Confidence, ConfidenceGit)
+	}
+}
+
+func TestTheFirstResolveDoesNotWaitForGit(t *testing.T) {
+	// The whole point of the cache: a poll must never block on a subprocess.
+	release := make(chan struct{})
+	g := stubGit(nil)
+	g.lookup = func(ctx context.Context, _ string) (string, bool) {
+		select {
+		case <-release:
+		case <-ctx.Done():
+		}
+		return "MC-13200", true
+	}
+	defer close(release)
+
+	done := make(chan struct{})
+	go func() {
+		g.Resolve(&state.PaneState{CWD: "/Users/dev/work/dashboard"})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Resolve blocked on the git lookup")
+	}
+}
+
+func TestDefaultBranchesAddNothing(t *testing.T) {
+	for _, branch := range []string{"main", "master", "Main"} {
+		t.Run(branch, func(t *testing.T) {
+			g := stubGit(map[string]string{"/Users/dev/work/dashboard": branch})
+			pane := &state.PaneState{CWD: "/Users/dev/work/dashboard"}
+
+			awaitLookup(t, g, pane)
+			if _, ok := g.Resolve(pane); ok {
+				t.Errorf("branch %q was used as an activity", branch)
+			}
+		})
+	}
+}
+
+func TestConventionalPrefixesAreDropped(t *testing.T) {
+	cases := map[string]string{
+		"feature/MC-13200":    "MC-13200",
+		"bugfix/oauth-scopes": "oauth-scopes",
+		"fix/oauth":           "oauth",
+		"HOTFIX/urgent":       "urgent",
+		"release/2.0":         "2.0",
+		// Not a namespace, so nothing is dropped.
+		"oauth/fix":  "oauth/fix",
+		"MC-13200":   "MC-13200",
+		"feature/":   "feature/",
+		"feature":    "feature",
+		"a/b/c":      "a/b/c",
+		"feat/a/b/c": "a/b/c",
+	}
+	for branch, want := range cases {
+		if got := shortenBranch(branch); got != want {
+			t.Errorf("shortenBranch(%q) = %q, want %q", branch, got, want)
+		}
+	}
+}
+
+func TestNoRepositoryContributesNothing(t *testing.T) {
+	g := stubGit(nil)
+	pane := &state.PaneState{CWD: "/Users/dev/not-a-repo"}
+
+	if _, ok := awaitBranch(t, g, pane); ok {
+		t.Error("a directory outside a repository produced a branch")
+	}
+}
+
+func TestRelativeAndEmptyDirectoriesAreIgnored(t *testing.T) {
+	g := stubGit(map[string]string{"work/dashboard": "MC-13200"})
+
+	for _, pane := range []*state.PaneState{
+		{CWD: "work/dashboard"},
+		{},
+		nil,
+	} {
+		if _, ok := g.Resolve(pane); ok {
+			t.Errorf("pane %+v produced a branch", pane)
+		}
+	}
+}
+
+func TestTheForegroundDirectoryIsTheFallback(t *testing.T) {
+	g := stubGit(map[string]string{"/Users/dev/work/dashboard": "MC-13200"})
+	pane := &state.PaneState{ForegroundCWD: "/Users/dev/work/dashboard"}
+
+	if _, ok := awaitBranch(t, g, pane); !ok {
+		t.Error("the foreground directory was not consulted")
+	}
+}
+
+func TestRepeatedResolvesDoNotSpawnRepeatedLookups(t *testing.T) {
+	var calls atomic.Int64
+	g := stubGit(nil)
+	g.lookup = func(context.Context, string) (string, bool) {
+		calls.Add(1)
+		return "MC-13200", true
+	}
+	pane := &state.PaneState{CWD: "/Users/dev/work/dashboard"}
+
+	awaitBranch(t, g, pane)
+	for i := 0; i < 100; i++ {
+		g.Resolve(pane)
+	}
+
+	// One for the first sighting; the rest are served from the cache because
+	// none of them is older than the TTL.
+	if got := calls.Load(); got != 1 {
+		t.Errorf("git ran %d times, want once", got)
+	}
+}
+
+func TestAnAgedReadingIsRefreshed(t *testing.T) {
+	var branch atomic.Value
+	branch.Store("MC-13200")
+
+	g := stubGit(nil)
+	g.ttl = time.Millisecond
+	g.lookup = func(context.Context, string) (string, bool) {
+		return branch.Load().(string), true
+	}
+	pane := &state.PaneState{CWD: "/Users/dev/work/dashboard"}
+
+	if parts, _ := awaitBranch(t, g, pane); parts.Activity != "MC-13200" {
+		t.Fatalf("activity = %q, want MC-13200", parts.Activity)
+	}
+
+	branch.Store("MC-14000")
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if parts, _ := g.Resolve(pane); parts.Activity == "MC-14000" {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the checkout never reached the title")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestAStaleReadingIsUsedWhileItRefreshes(t *testing.T) {
+	// A tab must not flicker back to its bare directory name every time the
+	// reading ages out.
+	block := make(chan struct{})
+	var first sync.Once
+
+	g := stubGit(nil)
+	g.ttl = time.Millisecond
+	g.lookup = func(ctx context.Context, _ string) (string, bool) {
+		ready := false
+		first.Do(func() { ready = true })
+		if !ready {
+			select {
+			case <-block:
+			case <-ctx.Done():
+			}
+		}
+		return "MC-13200", true
+	}
+	defer close(block)
+
+	pane := &state.PaneState{CWD: "/Users/dev/work/dashboard"}
+	awaitBranch(t, g, pane)
+
+	time.Sleep(5 * time.Millisecond)
+	for i := 0; i < 5; i++ {
+		parts, ok := g.Resolve(pane)
+		if !ok || parts.Activity != "MC-13200" {
+			t.Fatalf("resolve %d lost the branch while refreshing: %+v", i, parts)
+		}
+	}
+}
+
+func TestATimedOutLookupIsNotFatal(t *testing.T) {
+	g := stubGit(nil)
+	g.timeout = time.Millisecond
+	g.lookup = func(ctx context.Context, _ string) (string, bool) {
+		<-ctx.Done()
+		return "", false
+	}
+	pane := &state.PaneState{CWD: "/Users/dev/work/dashboard"}
+
+	awaitLookup(t, g, pane)
+	if _, ok := g.Resolve(pane); ok {
+		t.Error("a timed-out lookup produced a branch")
+	}
+}
+
+func TestGitSourceIsSafeUnderConcurrentUse(t *testing.T) {
+	g := stubGit(map[string]string{"/Users/dev/work/dashboard": "MC-13200"})
+	var wg sync.WaitGroup
+
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for n := 0; n < 200; n++ {
+				g.Resolve(&state.PaneState{CWD: "/Users/dev/work/dashboard"})
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+// The tests below drive the real executable, because the point of the source is
+// what git actually answers.
+
+func TestRealGitReadsTheCheckedOutBranch(t *testing.T) {
+	repo := newRepo(t)
+	run(t, repo, "checkout", "-b", "feature/MC-13200")
+
+	branch, ok := gitBranch(context.Background(), repo)
+	if !ok {
+		t.Fatal("git reported no branch in a repository")
+	}
+	if branch != "feature/MC-13200" {
+		t.Errorf("branch = %q, want feature/MC-13200", branch)
+	}
+}
+
+func TestRealGitOutsideARepository(t *testing.T) {
+	dir := t.TempDir()
+	// A temp dir can sit inside a repository on some machines; make sure it
+	// cannot be one.
+	t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(dir))
+
+	if _, ok := gitBranch(context.Background(), dir); ok {
+		t.Error("git reported a branch outside a repository")
+	}
+}
+
+func TestRealGitOnADetachedHead(t *testing.T) {
+	repo := newRepo(t)
+	run(t, repo, "checkout", "--detach")
+
+	if _, ok := gitBranch(context.Background(), repo); ok {
+		t.Error("a detached HEAD was reported as a branch")
+	}
+}
+
+func TestRealGitOnAMissingDirectory(t *testing.T) {
+	if _, ok := gitBranch(context.Background(), "/nonexistent/for/auto/title"); ok {
+		t.Error("a missing directory produced a branch")
+	}
+}
+
+// newRepo creates a repository with one commit, so HEAD resolves.
+func newRepo(t *testing.T) string {
+	t.Helper()
+	requireGit(t)
+
+	dir := t.TempDir()
+	run(t, dir, "init", "--quiet")
+	run(t, dir, "config", "user.email", "test@example.com")
+	run(t, dir, "config", "user.name", "Test")
+
+	if err := os.WriteFile(filepath.Join(dir, "file"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	run(t, dir, "add", "file")
+	run(t, dir, "commit", "--quiet", "-m", "first")
+	return dir
+}
+
+func run(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v: %s", args, err, out)
+	}
+}
+
+func requireGit(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			t.Skip("git is not installed")
+		}
+		t.Fatalf("look up git: %v", err)
+	}
+}
+
+func TestTheShippedChainPutsTheBranchAfterTheDirectory(t *testing.T) {
+	// End to end through Default(), so the ladder's order is exercised rather
+	// than assumed: the directory is the context, the branch the activity.
+	repo := newRepo(t)
+	run(t, repo, "checkout", "-b", "feature/MC-13200")
+
+	chain := Default(DefaultMaxLength)
+	tab := tabWithPane(&state.PaneState{CWD: repo})
+	want := filepath.Base(repo) + " · MC-13200"
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		got := chain.Resolve(context.Background(), tab)
+		if got.Name == want {
+			if got.Reason != "git" {
+				t.Errorf("reason = %q, want git", got.Reason)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("name = %q, want %q", got.Name, want)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestAMeaningfulTerminalTitleOutranksTheBranch(t *testing.T) {
+	repo := newRepo(t)
+	run(t, repo, "checkout", "-b", "feature/MC-13200")
+
+	chain := Default(DefaultMaxLength)
+	tab := tabWithPane(&state.PaneState{CWD: repo, TerminalTitle: "Fix OAuth redirect"})
+
+	// Give the branch every chance to arrive before asserting it lost.
+	time.Sleep(50 * time.Millisecond)
+	got := chain.Resolve(context.Background(), tab)
+
+	if want := filepath.Base(repo) + " · Fix OAuth redirect"; got.Name != want {
+		t.Errorf("name = %q, want %q", got.Name, want)
+	}
+}

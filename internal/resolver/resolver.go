@@ -83,6 +83,7 @@ func Default(maxLength int) *Deterministic {
 	return New(maxLength,
 		Agent{},
 		TerminalTitle{},
+		NewGit(),
 		NewCWD(),
 		AgentName{},
 	)
