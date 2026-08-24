@@ -42,7 +42,7 @@ func start(t *testing.T, snapshot herdr.Snapshot) *harness {
 	t.Helper()
 
 	client := herdr.NewFake(snapshot)
-	app := New(testConfig(), discardLogger(), resolver.New(resolver.DefaultMaxLength, resolver.NewCWD()))
+	app := New(testConfig(), discardLogger(), resolver.Default(resolver.DefaultMaxLength))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	h := &harness{t: t, app: app, client: client, done: make(chan error, 1), cancel: cancel}
@@ -345,7 +345,7 @@ func TestRunStopsCleanlyOnCancellation(t *testing.T) {
 
 func TestRunReportsALostConnection(t *testing.T) {
 	client := herdr.NewFake(herdr.Snapshot{})
-	app := New(testConfig(), discardLogger(), resolver.New(resolver.DefaultMaxLength, resolver.NewCWD()))
+	app := New(testConfig(), discardLogger(), resolver.Default(resolver.DefaultMaxLength))
 
 	done := make(chan error, 1)
 	go func() { done <- app.Run(context.Background(), client) }()
@@ -370,7 +370,7 @@ func TestBootstrapFailureIsReported(t *testing.T) {
 	client := herdr.NewFake(herdr.Snapshot{})
 	client.Close()
 
-	app := New(testConfig(), discardLogger(), resolver.New(resolver.DefaultMaxLength, resolver.NewCWD()))
+	app := New(testConfig(), discardLogger(), resolver.Default(resolver.DefaultMaxLength))
 	if err := app.Run(context.Background(), client); err == nil {
 		t.Error("Run succeeded despite a failed bootstrap")
 	}
@@ -455,5 +455,49 @@ func TestVanishedTabIsDroppedQuietly(t *testing.T) {
 			t.Fatal("a tab Herdr no longer knows about is still cached")
 		}
 		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestTerminalTitleFlowsThroughEvents(t *testing.T) {
+	h := start(t, herdr.Snapshot{
+		Tabs: []herdr.TabInfo{{TabID: "wE:t1", Label: "1"}},
+		Panes: []herdr.PaneInfo{
+			{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true},
+		},
+	})
+
+	renames := h.awaitRenames(1)
+	if renames[0].Label != "dashboard" {
+		t.Fatalf("label = %q, want dashboard", renames[0].Label)
+	}
+
+	// A program sets a meaningful title; Herdr reports it as a pane update.
+	h.client.Emit(herdr.EventPaneUpdated, herdr.PaneUpdatedData{
+		Pane: herdr.PaneInfo{
+			PaneID: "wE:p1", TabID: "wE:t1", Focused: true,
+			CWD:                   "/Users/dev/work/dashboard",
+			TerminalTitle:         "◐ Fix OAuth redirect",
+			TerminalTitleStripped: "Fix OAuth redirect",
+		},
+	})
+
+	renames = h.awaitRenames(2)
+	if renames[1].Label != "dashboard · Fix OAuth redirect" {
+		t.Fatalf("label = %q, want %q", renames[1].Label, "dashboard · Fix OAuth redirect")
+	}
+
+	// The title goes back to something generic; the tab returns to its
+	// directory rather than keeping a stale title.
+	h.client.Emit(herdr.EventPaneUpdated, herdr.PaneUpdatedData{
+		Pane: herdr.PaneInfo{
+			PaneID: "wE:p1", TabID: "wE:t1", Focused: true,
+			CWD:                   "/Users/dev/work/dashboard",
+			TerminalTitleStripped: "zsh",
+		},
+	})
+
+	renames = h.awaitRenames(3)
+	if renames[2].Label != "dashboard" {
+		t.Errorf("label = %q, want dashboard", renames[2].Label)
 	}
 }

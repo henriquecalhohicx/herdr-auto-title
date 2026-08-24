@@ -116,16 +116,17 @@ func (c *Cache) putPaneLocked(pane herdr.PaneInfo) string {
 	}
 
 	tab.Panes[pane.PaneID] = &PaneState{
-		ID:            pane.PaneID,
-		TabID:         pane.TabID,
-		CWD:           pane.CWD,
-		ForegroundCWD: pane.ForegroundCWD,
-		TerminalTitle: pane.TerminalTitleStripped,
-		Agent:         pane.Agent,
-		AgentStatus:   pane.AgentStatus,
-		Focused:       pane.Focused,
-		Revision:      pane.Revision,
-		UpdatedAt:     c.now(),
+		ID:               pane.PaneID,
+		TabID:            pane.TabID,
+		CWD:              pane.CWD,
+		ForegroundCWD:    pane.ForegroundCWD,
+		TerminalTitle:    pane.TerminalTitleStripped,
+		TerminalTitleRaw: pane.TerminalTitle,
+		Agent:            pane.Agent,
+		AgentStatus:      pane.AgentStatus,
+		Focused:          pane.Focused,
+		Revision:         pane.Revision,
+		UpdatedAt:        c.now(),
 	}
 	tab.Revision++
 	c.paneTab[pane.PaneID] = pane.TabID

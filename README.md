@@ -7,14 +7,15 @@ over the Herdr socket, and keeps every tab's title in step with what that tab is
 actually doing. It is written in Go and ships as a single executable: no Node,
 Bun or Python runtime, no database, no external service, and no LLM.
 
-> **Status: first slice.** Titles currently come from the pane's working
-> directory. Terminal titles, agent context, known commands, SSH and Git land in
-> later slices, and the resolver is already built as a priority ladder they slot
-> into.
+> **Status: early.** Titles come from the terminal title, falling back to the
+> pane's working directory. Agent context, known commands, SSH and Git land in
+> later slices, and the resolver is already built as the priority ladder they
+> slot into.
 
 ```
-~/work/dashboard  →  dashboard
-$HOME             →  Shell
+~/work/dashboard                            →  dashboard
+~/work/dashboard, title "Fix OAuth redirect"→  dashboard · Fix OAuth redirect
+$HOME                                       →  Shell
 ```
 
 ## Installation
@@ -94,15 +95,23 @@ one.
 |---------:|--------|--------|
 | 1 | Manual rename protection | later slice |
 | 2 | Meaningful agent title | later slice |
-| 3 | Meaningful terminal title | later slice |
+| 3 | Meaningful terminal title | **implemented** |
 | 4 | Known foreground process | later slice |
 | 5 | SSH session | later slice |
 | 6 | Git context | later slice |
 | 7 | Working directory | **implemented** |
 | 8 | Generic fallback (`Shell`) | **implemented** |
 
-Every value that reaches a title — a directory name today, a terminal or agent
-title tomorrow — is stripped of ANSI escapes and control characters, whitespace
+A source is skipped when its value is too generic to mean anything: a shell or
+program name (`zsh`, `node`, `Claude Code`), or anything carrying a location —
+an absolute path, a home-anchored path, a URI. The context half of a title
+already says where the user is, and titles that repeat it change with every
+keystroke: an editor titling its window `Makefile (~/work/dashboard) - Nvim`
+renamed a tab five times in six seconds before that rule existed. Relative paths
+still count as meaningful, so `Fix bug in src/auth.ts` survives.
+
+Every value that reaches a title — a directory name, a terminal title, an agent
+title later — is stripped of ANSI escapes and control characters, whitespace
 is normalized, repeated separators are collapsed, and the result is truncated to
 the maximum length. Nothing derived from terminal output is ever passed to a
 shell: renames go over the socket API, never through `sh -c`.

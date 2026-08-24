@@ -14,13 +14,16 @@ type PaneState struct {
 	TabID         string
 	CWD           string
 	ForegroundCWD string
-	TerminalTitle string
-	Agent         string
-	AgentSession  string
-	AgentStatus   string
-	Focused       bool
-	Revision      uint64
-	UpdatedAt     time.Time
+	// TerminalTitle is Herdr's cleaned title; TerminalTitleRaw still carries
+	// escapes and decorative prefixes and is only a fallback.
+	TerminalTitle    string
+	TerminalTitleRaw string
+	Agent            string
+	AgentSession     string
+	AgentStatus      string
+	Focused          bool
+	Revision         uint64
+	UpdatedAt        time.Time
 }
 
 // Clone returns an independent copy, so callers can read pane context without

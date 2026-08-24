@@ -6,6 +6,7 @@ package resolver
 
 import (
 	"context"
+	"strings"
 
 	"herdr-auto-title/internal/state"
 )
@@ -74,6 +75,16 @@ func New(maxLength int, sources ...Source) *Deterministic {
 	return &Deterministic{sources: sources, maxLength: maxLength}
 }
 
+// Default builds the resolver Auto Title ships with: every source in priority
+// order, highest first. Later tickets add their sources here, so the binary and
+// the tests can never drift apart on what the chain contains.
+func Default(maxLength int) *Deterministic {
+	return New(maxLength,
+		TerminalTitle{},
+		NewCWD(),
+	)
+}
+
 // Resolve walks the sources in priority order. Each field is filled by the
 // first source that supplies it, so a lower-priority source can complete a
 // title without overriding what a higher-priority source already decided.
@@ -106,6 +117,12 @@ func (d *Deterministic) Resolve(_ context.Context, tab state.TabState) Decision 
 		if parts.Context != "" && parts.Activity != "" {
 			break
 		}
+	}
+
+	// A shell that titles its window after the directory would otherwise
+	// produce "dashboard · dashboard".
+	if strings.EqualFold(parts.Activity, parts.Context) {
+		parts.Activity = ""
 	}
 
 	name := Format(parts, d.maxLength)

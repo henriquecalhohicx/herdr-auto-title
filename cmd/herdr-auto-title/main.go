@@ -50,7 +50,7 @@ func run() error {
 	}
 	defer client.Close()
 
-	titles := resolver.New(cfg.MaxLength, resolver.NewCWD())
+	titles := resolver.Default(cfg.MaxLength)
 
 	// One connection, one run. Reconnecting after a dropped socket is a later
 	// slice; today a lost connection ends the process with the reason logged.
