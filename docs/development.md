@@ -24,15 +24,16 @@ make test-v      # the same, verbose
 make check       # fmt + vet + test, run this before every commit
 ```
 
-The suite drives the entire pipeline through `herdr.FakeClient`: bootstrap,
-event routing, debounce collapsing, deduplication, rename failures, disconnects.
-If a change can be expressed as "given this state, expect this title", it belongs
-here and nowhere else.
+The suite drives the whole loop through `herdr.StubClient`: the first poll, a
+tab appearing later, deduplication, rename failures, a poll that fails outright.
+If a change can be expressed as "given this session, expect this title", it
+belongs here and nowhere else.
 
-**Write the test first when you are fixing something a live run revealed.** Both
-defects found so far — a busy pane starving its own debounce, and a tab closing
-between resolution and rename — are now regression tests, and both would have
-been invisible to a smoke test that only checked the happy path.
+**Write the test first when you are fixing something a live run revealed.** Every
+defect found so far came from a live run and none from the happy path: a busy
+pane starving its own timer, a tab closing between resolution and rename, and
+the event backlog that eventually cost the event stream its place in the
+design.
 
 ### 2. Live run — a minute, in your real session
 
@@ -70,21 +71,21 @@ in another tab will rebuild and restart on it.
 ### 3. Protocol probe — when you are about to assume something
 
 ```sh
-make probe-subs      # subscription types Herdr actually accepts
-make probe-events    # the live event stream, one readable line per event
+make probe-subs      # subscription types Herdr accepts (diagnostic)
+make probe-events    # Herdr's event stream (diagnostic; the plugin does not use it)
 make probe-snapshot  # the snapshot Auto Title bootstraps from
 ```
 
 `scripts/probe.py` talks to the socket directly, so it shows you the wire truth
 rather than what this repo believes. Reach for it **before** writing code that
-subscribes to a new event, reads a new field, or calls a new method.
+reads a new field or calls a new method.
 
 This is not optional caution. The specification this project was planned from got
 three protocol details wrong, each of which would have cost an afternoon of
 debugging:
 
 - the socket serves **one request per connection**, and any request sent on a
-  subscription connection ends the stream;
+  subscription connection would end the stream;
 - subscription types are dot-separated (`pane.updated`) while the events they
   deliver arrive snake_case (`pane_updated`);
 - `pane.output_changed` is a real event kind but is **not** an accepted
@@ -104,7 +105,7 @@ blockers are done.
 2. Write the failing test for the behaviour the ticket describes.
 3. Implement until `make check` is green.
 4. Do one live run and actually look at the logs — the fast loop cannot see
-   event timing, event volume, or what Herdr does under load.
+   real churn, real title values, or what Herdr does under load.
 5. Tick the ticket's acceptance criteria. If a criterion turned out to be based
    on something false, fix the ticket text rather than quietly skipping it.
 
@@ -114,15 +115,15 @@ blockers are done.
 
 | Line | Meaning |
 |------|---------|
-| `subscribed to herdr events` | the stream is live; if this never appears, the subscription was rejected |
-| `session snapshot loaded` | bootstrap worked; `tabs=` and `panes=` show what was seeded |
-| `event received` | the router saw an event and armed a timer |
-| `title unchanged` | resolution ran and deduplication suppressed the rename — the common case |
-| `tab renamed` | the only line that means Herdr was actually asked to do something |
+| `starting auto title` | the poll interval and length limit actually in force |
+| `tab renamed` | the only line that means Herdr was asked to do something |
+| `poll failed` | a snapshot did not come back; the next tick retries |
 | `rename failed` | something went wrong that is worth your attention |
 
-A quiet log with `event received` lines and no renames is the plugin working
-correctly, not the plugin doing nothing.
+A log with nothing after `starting auto title` is the plugin working correctly:
+every tab already carries the name it should. The loop is deliberately silent
+when it has nothing to do, because at two polls a second anything else would be
+unreadable.
 
 ## Things that will bite you
 
@@ -130,15 +131,21 @@ correctly, not the plugin doing nothing.
 not remember previous names. Manual rename protection is a later ticket; until it
 lands, a name you set by hand is overwritten on the next context change.
 
-**A busy pane is titled on the one-second cap, not the 200 ms window.** A pane
-running an agent emits updates every ~100 ms, which would rearm the debounce
-timer forever. The cap is what makes such a tab get a name at all.
+**The poll interval is the rename rate.** A tab changes name at most twice a
+second by default, however fast its pane is churning. If a tab renames more
+often than you can read it, raise `HERDR_AUTO_TITLE_POLL_MS`.
 
 **Short-lived tabs produce `tab_not_found`.** Herdr creates and closes tabs for
-its own purposes faster than events arrive. That is handled and logged at DEBUG;
-if you see it as a warning, something regressed.
+its own purposes between a snapshot and the rename it leads to. That is handled
+and logged at DEBUG; if you see it as a warning, something regressed.
 
-**`go test -race` is the gate, not `go test`.** The pipeline is concurrent by
-design: socket reader, router, per-tab timers, reconciliation workers. Races here
+**Do not reach for the event stream.** It looks like the obvious mechanism and
+it is a trap: subscribing replays about ten seconds of history per active pane
+before anything live, and there is no cursor to skip it. The measurements are in
+CLAUDE.md. If you think you have found a way around it, measure and record the
+result there before changing the design back.
+
+**`go test -race` is the gate, not `go test`.** The change history is shared
+state and a future reset action will touch it from outside the loop. Races here
 surface as tabs that are occasionally named wrong, which is nearly impossible to
 debug after the fact.

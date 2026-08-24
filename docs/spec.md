@@ -9,9 +9,9 @@ The plugin must be implemented in **Go** as a standalone long-running process.
 The plugin must:
 
 - run as a persistent Herdr plugin process;
-- subscribe to Herdr events through the Herdr socket API;
+- read the Herdr session through the Herdr socket API;
 - maintain an in-memory state cache;
-- debounce rapid event bursts;
+- rename only when the title it derives differs from the tab's current label;
 - determine useful tab titles using a deterministic resolver;
 - rename tabs through the Herdr socket API or Herdr CLI;
 - require no Node.js, Bun, Python, or other runtime;
@@ -92,22 +92,19 @@ The implementation and documentation should use "Auto Title" rather than "Auto R
                                     │
                                     ▼
                          ┌─────────────────────┐
-                         │ events.subscribe    │
+                         │ session.snapshot    │
+                         │   every 500 ms      │
                          └──────────┬──────────┘
                                     │
                                     ▼
                          ┌─────────────────────┐
-                         │    Event Router     │
+                         │  Dominant pane per  │
+                         │        tab          │
                          └──────────┬──────────┘
                                     │
                                     ▼
                          ┌─────────────────────┐
-                         │    State Cache      │
-                         └──────────┬──────────┘
-                                    │
-                                    ▼
-                         ┌─────────────────────┐
-                         │ Debounce / Dedup    │
+                         │    Deduplication    │
                          └──────────┬──────────┘
                                     │
                                     ▼
@@ -123,7 +120,11 @@ The implementation and documentation should use "Auto Title" rather than "Auto R
                          └─────────────────────┘
 ```
 
-The plugin must use the Herdr raw Socket API for the persistent event subscription. Herdr explicitly documents the raw socket API as the integration layer for long-lived event subscriptions, and `session.snapshot` is intended for clients maintaining a local runtime cache. The socket API exposes `tab.rename` and `events.subscribe`.
+The plugin must use the Herdr raw Socket API. It uses exactly two methods: `session.snapshot` to read the session and `tab.rename` to act on it.
+
+**Auto Title deliberately does not subscribe to events.** This reverses the original design, and the reason is measured rather than stylistic. `events.subscribe` replays a backlog before delivering anything live — roughly the last 95 revisions of every pane, paced at about ten a second, so about ten seconds of history for each active pane — and live events queue behind it. A change made two seconds after subscribing was observed arriving thirteen seconds later. The protocol offers no way out: `events.subscribe` takes only a subscription list, event envelopes carry no timestamp or sequence number, and no method exposes a cursor.
+
+A snapshot has no such lag. It describes the present, and one request returns the whole session — 0.47 ms and 6 KB for a six-pane session — so polling twice a second costs about a thousandth of a core. Everything the resolver reads is in the snapshot, so the event stream would add latency and a large amount of machinery without adding information.
 
 ---
 
@@ -181,7 +182,7 @@ herdr-auto-title/
 │   ├── herdr/
 │   │   ├── client.go
 │   │   ├── protocol.go
-│   │   └── events.go
+│   │   └── session.go
 │   ├── state/
 │   │   ├── cache.go
 │   │   └── tab.go
@@ -193,7 +194,7 @@ herdr-auto-title/
 │   │   ├── ssh.go
 │   │   ├── git.go
 │   │   └── cwd.go
-│   └── debounce/
+│   └── state/
 │       └── manager.go
 └── tests/
 ```
@@ -248,13 +249,11 @@ herdr-auto-title process
         ↓
 connect to socket
         ↓
-bootstrap session snapshot
+first poll names what already exists
         ↓
-subscribe to events
+poll loop, every 500 ms
         ↓
-event loop
-        ↓
-reconnect on failure
+a failed poll is logged and retried
         ↓
 graceful shutdown
 ```
@@ -271,185 +270,97 @@ Do not hard-code a socket path.
 
 The transport implementation must account for Herdr's platform-specific local transport. Do not assume that every platform uses Unix domain sockets.
 
-Create an abstraction such as:
+Herdr serves **one request per connection** and closes it after answering, so each call dials a connection of its own. There is no long-lived connection to manage, and therefore no client lifecycle beyond the call:
 
 ```go
 type HerdrClient interface {
     Call(ctx context.Context, method string, params any, result any) error
-    Subscribe(ctx context.Context, subscriptions []Subscription) error
-    Close() error
 }
 ```
-
-The implementation must support the current Herdr socket protocol.
 
 Do not reimplement Herdr's protocol from assumptions. Inspect the current socket schema using the installed Herdr API/schema facilities when implementing the client.
 
 ---
 
-## 10. Bootstrap with session snapshot
+## 10. Reading the session
 
-After connecting:
+`session.snapshot` returns the whole session: every tab with its label, and every pane with its directory, terminal title, agent and agent status. It is the only read Auto Title performs.
 
-1. call `session.snapshot`;
-2. build the complete local state cache;
-3. establish event subscriptions;
-4. reconcile existing tabs.
-
-The snapshot must be treated as the initial state only.
-
-Afterward, the cache must be updated exclusively from events and explicit refreshes.
-
-On reconnect:
-
-1. reconnect;
-2. call `session.snapshot` again;
-3. replace or reconcile the local cache;
-4. resubscribe;
-5. continue processing events.
-
-This prevents missed events during a disconnect.
+The first poll happens before the loop starts, so tabs that already exist are named without waiting for a tick. If that first poll fails there is nothing to run for, and the process exits with the reason; every later failure is logged and retried on the next tick.
 
 ---
 
-## 11. Event subscriptions
+## 11. Why not events
 
-Subscribe to currently supported events relevant to title generation.
+Herdr exposes an event stream, and Auto Title does not use it. This reverses the original design. The reason is measured, and it is recorded here so the decision is not quietly re-litigated.
 
-Candidate subscriptions:
+**Subscribing replays history first.** Measured against Herdr 0.8.2: a new subscriber receives roughly the last 95 revisions of every pane before any live event, paced at about ten a second. A six-pane session took 25 seconds to drain, and the drain grows by about ten seconds for every additional active pane. The replay includes panes that have since closed.
 
-```text
-tab.created
-tab.renamed
-tab.closed
-pane.created
-pane.updated
-pane.agent_detected
-pane.agent_status_changed
-```
+**Live events queue behind the replay.** A `tab.rename` issued two seconds after subscribing produced a `tab_renamed` event thirteen seconds later. Until the backlog drains, the stream describes a session that no longer exists.
 
-Before implementation, verify the exact event names and payload schemas against the current Herdr Socket API. Do not implement unsupported event names.
+**The protocol offers no way out.** `events.subscribe` takes only a subscription list — no cursor, no `since`, no sequence number. Event envelopes carry `event` and `data` and nothing else: no timestamp, no ordinal. No other method exposes a stream position.
 
-Event purposes:
+**Events carry nothing a snapshot lacks.** Every field the resolver reads is in `PaneInfo`, which the snapshot returns in full.
 
-### `tab.created`
-
-Create initial tab state and schedule reconciliation.
-
-### `tab.closed`
-
-Remove the tab from the cache.
-
-### `tab.renamed`
-
-Update the cached name and determine whether the rename was manual or plugin-generated.
-
-### `pane.created`
-
-Create/update pane state and reconcile the parent tab.
-
-### `pane.updated`
-
-Primary trigger for changes such as terminal title, process, cwd, and pane metadata.
-
-### Agent-related events
-
-Reconcile when an agent is detected or changes state/title/context.
+So the stream would cost a subscription lifecycle, a backlog filter, and a second path into the state — in exchange for latency. Polling is both simpler and faster here.
 
 ---
 
-## 12. Event router
+## 12. The poll cycle
 
-The socket reader must never perform expensive work synchronously.
-
-Use:
+One tick does this and nothing else:
 
 ```text
-socket reader
-    ↓
-event channel
-    ↓
-event router
-    ↓
-state update
-    ↓
-schedule reconciliation
+session.snapshot
+↓
+record which panes changed  (revision advanced since the last poll)
+↓
+for each tab: select the context pane
+↓
+resolve a title
+↓
+rename if it differs from the label the snapshot reported
 ```
 
-Conceptually:
+The snapshot's label is the deduplication baseline, so a tab already carrying the right name costs nothing but the comparison.
 
-```go
-func (r *Router) Handle(event Event) {
-    switch event.Type {
-    case TabCreated:
-        r.handleTabCreated(event)
-
-    case TabClosed:
-        r.handleTabClosed(event)
-
-    case TabRenamed:
-        r.handleTabRenamed(event)
-
-    case PaneCreated,
-         PaneUpdated,
-         PaneAgentDetected,
-         PaneAgentStatusChanged:
-        r.handlePaneChange(event)
-    }
-}
-```
-
-Unknown events must be ignored safely.
+A rename that fails is logged and left for the next tick. A tab that closed between the snapshot and its rename answers `tab_not_found`, which is expected rather than an error.
 
 ---
 
 ## 13. State model
 
-Maintain all active state in memory.
-
-Example:
+Almost nothing is kept between polls. A snapshot describes the whole session as it is right now, so each poll builds the tabs it needs and discards them:
 
 ```go
 type TabState struct {
-    ID string
-
+    ID          string
     CurrentName string
-
-    Panes map[string]*PaneState
-
-    ManualName bool
-
-    ExpectedRename *ExpectedRename
-
-    Revision uint64
-
-    LastReconciledAt time.Time
+    Panes       map[string]*PaneState
 }
-```
 
-Pane state:
-
-```go
 type PaneState struct {
     ID string
 
-    CWD string
+    CWD           string
+    ForegroundCWD string
 
-    ForegroundProcess string
+    TerminalTitle    string
+    TerminalTitleRaw string
 
-    TerminalTitle string
+    Agent        string
+    DisplayAgent string
+    AgentTitle   string
+    AgentStatus  string
 
-    Agent string
-
-    AgentSession string
-
-    AgentStatus string
+    Focused   bool
+    ChangedAt time.Time
 }
 ```
 
-The cache must be concurrency-safe.
+The one thing carried forward is `ChangedAt`. A snapshot says what a pane holds but not when that became true, and a tab with several panes and no focus is named after whichever pane changed most recently. Herdr's pane revisions are monotonic, so comparing one poll's revisions against the last says which panes moved. Panes the session no longer holds are forgotten.
 
-Closed tabs must be removed immediately.
+That history must be concurrency-safe.
 
 ---
 
@@ -749,7 +660,7 @@ dashboard · MC-13200
 
 Avoid excessively long branch names.
 
-Git lookup must not block the event loop.
+Git lookup must not block the poll loop.
 
 Cache Git information when appropriate.
 
@@ -837,7 +748,7 @@ Never construct a shell command by concatenating these values.
 
 ## 27. Rename operation
 
-Prefer the Herdr socket API for the persistent plugin so the process can use the same connection/event client.
+Prefer the Herdr socket API for the persistent plugin so the process uses one client for reading and renaming.
 
 Use the raw `tab.rename` method.
 
@@ -861,46 +772,19 @@ for rename operations.
 
 ---
 
-## 28. Debouncing
-
-Each tab needs an independent debounce timer.
+## 28. Poll interval and rename rate
 
 Default:
 
 ```text
-200ms
+500ms
 ```
 
-On a relevant event:
+The interval is the rename rate limit: a tab can change name at most once per poll, however fast its pane is changing. A burst of activity between two polls is invisible — only the state at the moment of the poll matters — so no separate debounce is needed.
 
-```text
-cancel previous timer
-start new 200ms timer
-```
+A snapshot of a six-pane session measured 0.47 ms and 6 KB, so two polls a second cost about a thousandth of a core.
 
-When the timer fires:
-
-```text
-read latest state
-↓
-select context pane
-↓
-resolve title
-↓
-rename if necessary
-```
-
-A burst of events:
-
-```text
-pane.updated
-pane.updated
-pane.updated
-agent_status_changed
-terminal_title changed
-```
-
-must result in at most one reconciliation after the burst settles.
+Shortening the interval makes renames land sooner and lets a fast-changing pane rename more often; lengthening it does the reverse.
 
 ---
 
@@ -942,33 +826,15 @@ Expected-rename tracking must also prevent plugin-generated renames from being i
 
 ---
 
-## 31. Socket reconnect
+## 31. Connection failures
 
-If the socket disconnects:
+Every call dials its own connection, so there is no connection to lose and nothing to reconnect. A failed poll is a failed request:
 
-1. log the disconnect;
-2. stop using the old connection;
-3. reconnect with exponential backoff;
-4. call `session.snapshot`;
-5. rebuild/reconcile the local cache;
-6. resubscribe to events;
-7. continue processing.
+1. log it;
+2. keep the loop running;
+3. try again on the next tick.
 
-Suggested retry intervals:
-
-```text
-100ms
-250ms
-500ms
-1s
-2s
-5s
-10s
-```
-
-Cap at approximately 10 seconds.
-
-A temporary Herdr restart must not permanently terminate Auto Title.
+A temporary Herdr restart must not permanently terminate Auto Title. Because each poll dials afresh, recovery needs no backoff logic: the poll interval is the retry interval.
 
 ---
 
@@ -984,13 +850,9 @@ SIGINT
 Shutdown sequence:
 
 ```text
-stop accepting new events
+stop the ticker
 ↓
-cancel debounce timers
-↓
-close socket
-↓
-wait for active reconciliation operations
+let the poll in flight finish or be cancelled
 ↓
 exit
 ```
@@ -1001,37 +863,9 @@ Do not leave background goroutines running after shutdown.
 
 ## 33. Concurrency model
 
-Recommended architecture:
+One goroutine. The poll loop reads the session, decides, and renames in sequence; a tab's rename is a single request that costs well under a millisecond.
 
-```text
-                 socket reader
-                      │
-                      ▼
-                 event channel
-                      │
-                      ▼
-                 event router
-                      │
-                      ▼
-                state cache
-                      │
-                      ▼
-               per-tab debounce
-                      │
-                      ▼
-             bounded reconciliation
-```
-
-Use goroutines for:
-
-- socket reading;
-- reconciliation;
-- timers;
-- reconnect logic.
-
-Do not create an unbounded number of goroutines.
-
-Protect shared state with a mutex or another appropriate synchronization primitive.
+Cancellation propagates through the context handed to `Run`, so a signal ends the poll in flight rather than waiting for it.
 
 ---
 
@@ -1063,7 +897,7 @@ INFO tab renamed
     new="dashboard · Tests"
     reason="known_command"
 
-DEBUG event received
+DEBUG poll completed
     type="pane.updated"
     pane_id="..."
 
@@ -1084,7 +918,7 @@ Potential environment variables:
 
 ```text
 HERDR_AUTO_TITLE_DEBUG
-HERDR_AUTO_TITLE_DEBOUNCE_MS
+HERDR_AUTO_TITLE_POLL_MS
 HERDR_AUTO_TITLE_MAX_LENGTH
 ```
 
@@ -1094,7 +928,7 @@ Do not introduce a configuration file in V1 unless necessary.
 
 ## 36. Future LLM extension
 
-The architecture must allow a future semantic fallback without changing the event/state infrastructure.
+The architecture must allow a future semantic fallback without changing the poll loop or the state it builds.
 
 Current:
 
@@ -1143,10 +977,10 @@ user rename → automatic naming disabled
 plugin rename → automatic naming remains enabled
 ```
 
-### Debounce tests
+### Poll tests
 
 ```text
-10 events within 200ms
+10 changes between two polls
 → one reconciliation
 ```
 
@@ -1157,13 +991,13 @@ same generated name
 → zero rename calls
 ```
 
-### Reconnect tests
+### Failure tests
 
 ```text
 socket disconnect
-→ reconnect
+→ retry on the next tick
 → snapshot
-→ resubscribe
+→ keep the loop alive
 → continue
 ```
 
@@ -1179,16 +1013,21 @@ The race detector must pass.
 
 ---
 
-## 38. Fake Herdr client
+## 38. Stub Herdr client
 
-Implement a fake client for tests:
+Implement a stub client for tests. It describes a session and records what was
+done to it:
 
 ```go
-type FakeHerdrClient struct {
-    Events  chan Event
-    Renames []RenameCall
+type StubClient struct {
+    tabs    map[string]TabInfo
+    panes   map[string]PaneInfo
+    renames []RenameCall
 }
 ```
+
+A rename must change the stub's own label, so the next poll agrees with it the
+way Herdr would; otherwise a test cannot tell deduplication from a bug.
 
 Tests should be able to simulate:
 
@@ -1222,13 +1061,13 @@ Target startup time:
 
 on a typical development machine, excluding Herdr socket connection time.
 
-Target event-to-title latency:
+Target change-to-title latency:
 
 ```text
 < 300ms
 ```
 
-under normal conditions, including the default 200ms debounce.
+under normal conditions, which the default 500 ms poll interval bounds.
 
 The plugin must not continuously grow memory.
 
@@ -1350,10 +1189,10 @@ The implementation is complete when:
 - [ ] plugin maintains a persistent process;
 - [ ] plugin connects to the Herdr socket;
 - [ ] plugin uses `session.snapshot` for bootstrap;
-- [ ] plugin subscribes to supported relevant events;
+- [ ] plugin polls `session.snapshot` on an interval;
 - [ ] plugin maintains an in-memory state cache;
 - [ ] plugin supports multiple tabs independently;
-- [ ] plugin has per-tab debounce;
+- [ ] a tab renames at most once per poll;
 - [ ] plugin avoids duplicate rename calls;
 - [ ] plugin detects manual tab renames;
 - [ ] plugin preserves manual names;
@@ -1366,8 +1205,8 @@ The implementation is complete when:
 - [ ] Git/CWD are available as fallbacks;
 - [ ] generated titles are sanitized;
 - [ ] generated titles are length-limited;
-- [ ] socket reconnect works;
-- [ ] state is refreshed after reconnect;
+- [ ] a failed poll is retried on the next tick;
+- [ ] every poll decides from freshly read state;
 - [ ] graceful shutdown is implemented;
 - [ ] `go test -race ./...` passes;
 - [ ] no external API calls are made;
@@ -1382,11 +1221,11 @@ The implementation is complete when:
 The core data flow is:
 
 ```text
-Herdr event
+Herdr session change
     ↓
 update cached state
     ↓
-debounce
+poll
     ↓
 deterministic resolver
     ↓
@@ -1402,4 +1241,4 @@ There must be:
 - no transcript scanning;
 - no external service dependency.
 
-The architecture must remain extensible so a future LLM resolver can be added as a low-priority fallback without changing the event subscription, state cache, debounce, or rename infrastructure.
+The architecture must remain extensible so a future LLM resolver can be added as a low-priority fallback without changing the poll loop, the state it builds, or the rename path.

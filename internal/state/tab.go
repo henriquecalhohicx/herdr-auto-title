@@ -1,10 +1,9 @@
-// Package state holds Auto Title's view of the Herdr session.
+// Package state turns a Herdr session snapshot into the shape the resolver
+// names tabs from.
 //
-// The session snapshot seeds an index of which panes belong to which tab, and
-// events keep that index current. The content of a tab — titles, directories,
-// agents — is never cached: it is read back from Herdr when a tab is about to
-// be renamed, because Herdr replays a backlog of events on subscribe and a
-// payload therefore describes some past moment rather than the present.
+// Almost nothing is kept between polls. A snapshot describes the whole session
+// as it is right now, so each poll builds the tabs it needs and throws them
+// away again; the only thing carried forward is when each pane last changed.
 package state
 
 import (
@@ -35,9 +34,9 @@ type PaneState struct {
 	AgentStatus  string
 
 	Focused bool
-	// ChangedAt is when Auto Title last saw an event for this pane. Herdr's
-	// reads carry no timestamp, so this is the only ordering available when a
-	// tab holds several panes and none is focused.
+	// ChangedAt is when a poll last saw this pane's revision advance. Snapshots
+	// carry no timestamp, so this is the only ordering available when a tab
+	// holds several panes and none is focused.
 	ChangedAt time.Time
 }
 

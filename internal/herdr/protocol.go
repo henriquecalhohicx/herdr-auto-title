@@ -1,9 +1,8 @@
 // Package herdr implements a client for the Herdr local socket API.
 //
 // The wire format is newline-delimited JSON over the local socket named by
-// HERDR_SOCKET_PATH. Every line is one JSON object. Outbound lines are
-// requests; inbound lines are either responses (correlated by "id") or
-// broadcast events (carrying "event" and "data").
+// HERDR_SOCKET_PATH. Every line is one JSON object: a request out, a response
+// back, and then the connection closes.
 //
 // Verified against Herdr v0.8.2, protocol 20.
 package herdr
@@ -24,17 +23,11 @@ type request struct {
 	Params any    `json:"params"`
 }
 
-// frame is one inbound line. A response carries ID plus Result or Error; an
-// event carries Event plus Data.
+// frame is one inbound line: a result or an error.
 type frame struct {
-	ID     string          `json:"id"`
 	Result json.RawMessage `json:"result"`
 	Error  *APIError       `json:"error"`
-	Event  string          `json:"event"`
-	Data   json.RawMessage `json:"data"`
 }
-
-func (f *frame) isEvent() bool { return f.Event != "" }
 
 // APIError is an error returned by Herdr for a request.
 type APIError struct {
@@ -50,9 +43,6 @@ func (e *APIError) Error() string {
 const (
 	// CodeTabNotFound is returned when a tab has closed since it was cached.
 	CodeTabNotFound = "tab_not_found"
-	// CodePaneNotFound is the same for a pane. Both are expected: a tab or a
-	// pane can close between an event naming it and the read that follows.
-	CodePaneNotFound = "pane_not_found"
 )
 
 // ErrorCode returns the Herdr error code carried by err, or "" if err is not a
@@ -69,52 +59,13 @@ func ErrorCode(err error) string {
 const (
 	MethodPing            = "ping"
 	MethodSessionSnapshot = "session.snapshot"
-	MethodEventsSubscribe = "events.subscribe"
 	MethodTabRename       = "tab.rename"
-	MethodTabGet          = "tab.get"
-	MethodPaneGet         = "pane.get"
 )
-
-// Subscription selects one event stream. Subscription types use dot notation
-// ("pane.updated") while the events they deliver arrive with snake_case kinds
-// ("pane_updated"); see the Event* constants.
-//
-// Most types are global. A few — pane.agent_status_changed, pane.scroll_changed,
-// pane.output_matched — are per-pane and are rejected without a PaneID.
-type Subscription struct {
-	Type   string `json:"type"`
-	PaneID string `json:"pane_id,omitempty"`
-}
-
-// Subscription types Auto Title subscribes to.
-const (
-	SubTabCreated  = "tab.created"
-	SubTabClosed   = "tab.closed"
-	SubPaneCreated = "pane.created"
-	SubPaneUpdated = "pane.updated"
-	SubPaneClosed  = "pane.closed"
-	// SubPaneAgentDetected is global; it fires when Herdr starts or stops
-	// recognizing an agent in a pane.
-	SubPaneAgentDetected = "pane.agent_detected"
-)
-
-type subscribeParams struct {
-	Subscriptions []Subscription `json:"subscriptions"`
-}
 
 // TabRenameParams are the parameters of tab.rename.
 type TabRenameParams struct {
 	TabID string `json:"tab_id"`
 	Label string `json:"label"`
-}
-
-// TabTarget and PaneTarget name the object a read applies to.
-type TabTarget struct {
-	TabID string `json:"tab_id"`
-}
-
-type PaneTarget struct {
-	PaneID string `json:"pane_id"`
 }
 
 // emptyParams is the parameter object for methods that take none.

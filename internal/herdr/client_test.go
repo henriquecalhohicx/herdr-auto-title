@@ -10,10 +10,8 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
-	"time"
 )
 
 func discardLogger() *slog.Logger {
@@ -27,8 +25,7 @@ type incoming struct {
 	Params json.RawMessage `json:"params"`
 }
 
-// testServer imitates Herdr: one request per connection, except a subscribe,
-// after which the connection stays open and carries events.
+// testServer imitates Herdr: one request per connection, answered and closed.
 type testServer struct {
 	t    *testing.T
 	ln   net.Listener
@@ -36,15 +33,13 @@ type testServer struct {
 
 	mu          sync.Mutex
 	requests    []incoming
-	streams     []net.Conn
 	connections int
 
-	// reply returns the line to send back, and whether to keep the connection
-	// open as an event stream.
-	reply func(req incoming) (string, bool)
+	// reply returns the line to send back.
+	reply func(req incoming) string
 }
 
-func newTestServer(t *testing.T, reply func(incoming) (string, bool)) *testServer {
+func newTestServer(t *testing.T, reply func(incoming) string) *testServer {
 	t.Helper()
 
 	// Unix socket paths are short; keep well clear of the platform limit.
@@ -64,11 +59,6 @@ func newTestServer(t *testing.T, reply func(incoming) (string, bool)) *testServe
 	t.Cleanup(func() {
 		ln.Close()
 		os.RemoveAll(dir)
-		s.mu.Lock()
-		for _, conn := range s.streams {
-			conn.Close()
-		}
-		s.mu.Unlock()
 	})
 	return s
 }
@@ -105,63 +95,15 @@ func (s *testServer) serve(conn net.Conn) {
 	reply := s.reply
 	s.mu.Unlock()
 
-	response, keepOpen := reply(req)
-	if response != "" {
-		if _, err := io.WriteString(conn, response+"\n"); err != nil {
-			conn.Close()
-			return
-		}
+	if response := reply(req); response != "" {
+		_, _ = io.WriteString(conn, response+"\n")
 	}
-	if !keepOpen {
-		// Herdr closes the connection once a method has been answered.
-		conn.Close()
-		return
-	}
-
-	s.mu.Lock()
-	s.streams = append(s.streams, conn)
-	s.mu.Unlock()
+	// Herdr closes the connection once a method has been answered.
+	conn.Close()
 }
 
 func (s *testServer) client() *SocketClient {
-	c := NewWithPath(discardLogger(), s.path)
-	s.t.Cleanup(func() { c.Close() })
-	return c
-}
-
-// pushEvent writes a line on the subscription connection.
-func (s *testServer) pushEvent(line string) {
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		s.mu.Lock()
-		streams := append([]net.Conn(nil), s.streams...)
-		s.mu.Unlock()
-		if len(streams) > 0 {
-			io.WriteString(streams[0], line+"\n")
-			return
-		}
-		if time.Now().After(deadline) {
-			s.t.Fatal("no subscription connection to push an event on")
-		}
-		time.Sleep(time.Millisecond)
-	}
-}
-
-func (s *testServer) closeStream() {
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		s.mu.Lock()
-		streams := append([]net.Conn(nil), s.streams...)
-		s.mu.Unlock()
-		if len(streams) > 0 {
-			streams[0].Close()
-			return
-		}
-		if time.Now().After(deadline) {
-			s.t.Fatal("no subscription connection to close")
-		}
-		time.Sleep(time.Millisecond)
-	}
+	return NewWithPath(s.path)
 }
 
 func (s *testServer) connectionCount() int {
@@ -176,17 +118,14 @@ func (s *testServer) seen() []incoming {
 	return append([]incoming(nil), s.requests...)
 }
 
-// respondOK answers every method with an empty result and closes.
-func respondOK(req incoming) (string, bool) {
-	if req.Method == MethodEventsSubscribe {
-		return `{"id":"` + req.ID + `","result":{"type":"subscription_started"}}`, true
-	}
-	return `{"id":"` + req.ID + `","result":{}}`, false
+// respondOK answers every method with an empty result.
+func respondOK(req incoming) string {
+	return `{"id":"` + req.ID + `","result":{}}`
 }
 
 func TestCallDecodesResult(t *testing.T) {
-	srv := newTestServer(t, func(req incoming) (string, bool) {
-		return `{"id":"` + req.ID + `","result":{"version":"0.8.2"}}`, false
+	srv := newTestServer(t, func(req incoming) string {
+		return `{"id":"` + req.ID + `","result":{"version":"0.8.2"}}`
 	})
 
 	var got struct {
@@ -226,8 +165,8 @@ func TestEachCallUsesItsOwnConnection(t *testing.T) {
 }
 
 func TestCallReturnsAPIError(t *testing.T) {
-	srv := newTestServer(t, func(req incoming) (string, bool) {
-		return `{"id":"` + req.ID + `","error":{"code":"not_found","message":"no such tab"}}`, false
+	srv := newTestServer(t, func(req incoming) string {
+		return `{"id":"` + req.ID + `","error":{"code":"not_found","message":"no such tab"}}`
 	})
 
 	err := RenameTab(context.Background(), srv.client(), "wE:t1", "dashboard")
@@ -246,195 +185,20 @@ func TestCallReturnsAPIError(t *testing.T) {
 func TestCallReportsAnUncorrelatedError(t *testing.T) {
 	// Herdr answers a malformed request with an error frame carrying no id and
 	// then drops the connection.
-	srv := newTestServer(t, func(incoming) (string, bool) {
-		return `{"id":"","error":{"code":"invalid_request","message":"unknown variant"}}`, false
+	srv := newTestServer(t, func(incoming) string {
+		return `{"id":"","error":{"code":"invalid_request","message":"unknown variant"}}`
 	})
 
-	if err := srv.client().Call(context.Background(), MethodEventsSubscribe, nil, nil); err == nil {
+	if err := srv.client().Call(context.Background(), MethodSessionSnapshot, nil, nil); err == nil {
 		t.Error("Call succeeded despite an error frame")
 	}
 }
 
-func TestCallReportsAClosedConnection(t *testing.T) {
-	srv := newTestServer(t, func(incoming) (string, bool) { return "", false })
-
-	if err := srv.client().Call(context.Background(), MethodPing, nil, nil); err == nil {
-		t.Error("Call succeeded despite the connection closing without a response")
-	}
-}
-
-func TestCallRespectsContext(t *testing.T) {
-	release := make(chan struct{})
-	t.Cleanup(func() { close(release) })
-	srv := newTestServer(t, func(incoming) (string, bool) {
-		<-release
-		return "", false
-	})
-
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- srv.client().Call(ctx, MethodPing, nil, nil) }()
-
-	time.Sleep(20 * time.Millisecond)
-	cancel()
-
-	select {
-	case err := <-done:
-		if !errors.Is(err, context.Canceled) {
-			t.Errorf("error = %v, want context.Canceled", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("Call ignored its cancelled context")
-	}
-}
-
-func TestSubscribeDeliversEvents(t *testing.T) {
-	srv := newTestServer(t, respondOK)
-	client := srv.client()
-
-	if err := client.Subscribe(context.Background(), []Subscription{{Type: SubPaneUpdated}, {Type: SubTabCreated}}); err != nil {
-		t.Fatalf("Subscribe: %v", err)
-	}
-
-	seen := srv.seen()
-	if len(seen) != 1 || seen[0].Method != MethodEventsSubscribe {
-		t.Fatalf("server saw %+v, want one subscribe", seen)
-	}
-	// Subscription types are dot-separated even though events arrive snake_case.
-	params := string(seen[0].Params)
-	if !strings.Contains(params, `"pane.updated"`) || !strings.Contains(params, `"tab.created"`) {
-		t.Errorf("params = %s, want dot-notation subscription types", params)
-	}
-
-	srv.pushEvent(`{"event":"pane_updated","data":{"type":"pane_updated","pane":{"pane_id":"wE:p1","tab_id":"wE:t1","cwd":"/work/api"}}}`)
-
-	select {
-	case event := <-client.Events():
-		if event.Kind != EventPaneUpdated {
-			t.Fatalf("event kind = %q, want %q", event.Kind, EventPaneUpdated)
-		}
-		var payload PaneUpdatedData
-		if err := json.Unmarshal(event.Data, &payload); err != nil {
-			t.Fatalf("decode event: %v", err)
-		}
-		if payload.Pane.CWD != "/work/api" {
-			t.Errorf("cwd = %q, want /work/api", payload.Pane.CWD)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for the event")
-	}
-}
-
-func TestSubscribeReportsRejection(t *testing.T) {
-	srv := newTestServer(t, func(incoming) (string, bool) {
-		return `{"id":"","error":{"code":"invalid_request","message":"unknown variant ` + "`pane.output_changed`" + `"}}`, false
-	})
-
-	err := srv.client().Subscribe(context.Background(), []Subscription{{Type: "pane.output_changed"}})
-	if err == nil {
-		t.Fatal("Subscribe succeeded despite a rejection")
-	}
-	if !strings.Contains(err.Error(), "invalid_request") {
-		t.Errorf("error = %v, want it to mention invalid_request", err)
-	}
-}
-
-func TestSubscribeOnlyOnce(t *testing.T) {
-	srv := newTestServer(t, respondOK)
-	client := srv.client()
-
-	if err := client.Subscribe(context.Background(), []Subscription{{Type: SubTabCreated}}); err != nil {
-		t.Fatalf("first Subscribe: %v", err)
-	}
-	if err := client.Subscribe(context.Background(), []Subscription{{Type: SubTabCreated}}); err == nil {
-		t.Error("second Subscribe succeeded, want an error")
-	}
-}
-
-func TestUnparseableFrameIsSkipped(t *testing.T) {
-	srv := newTestServer(t, respondOK)
-	client := srv.client()
-	if err := client.Subscribe(context.Background(), []Subscription{{Type: SubTabCreated}}); err != nil {
-		t.Fatalf("Subscribe: %v", err)
-	}
-
-	srv.pushEvent(`{not json`)
-	srv.pushEvent(`{"event":"tab_created","data":{"type":"tab_created","tab":{"tab_id":"wE:t1"}}}`)
-
-	select {
-	case event := <-client.Events():
-		if event.Kind != EventTabCreated {
-			t.Errorf("event kind = %q, want %q", event.Kind, EventTabCreated)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("a malformed frame stopped the reader")
-	}
-}
-
-func TestLostStreamClosesEvents(t *testing.T) {
-	srv := newTestServer(t, respondOK)
-	client := srv.client()
-	if err := client.Subscribe(context.Background(), []Subscription{{Type: SubTabCreated}}); err != nil {
-		t.Fatalf("Subscribe: %v", err)
-	}
-
-	srv.closeStream()
-
-	select {
-	case _, ok := <-client.Events():
-		if ok {
-			t.Error("an event arrived after the stream was closed")
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("the event channel stayed open after the stream was closed")
-	}
-	if client.Err() == nil {
-		t.Error("Err is nil after the stream was closed")
-	}
-}
-
-func TestCloseIsIdempotent(t *testing.T) {
-	srv := newTestServer(t, respondOK)
-	client := srv.client()
-
-	if err := client.Close(); err != nil {
-		t.Fatalf("first Close: %v", err)
-	}
-	if err := client.Close(); err != nil {
-		t.Fatalf("second Close: %v", err)
-	}
-	if _, ok := <-client.Events(); ok {
-		t.Error("the event channel stayed open after Close")
-	}
-	if err := client.Call(context.Background(), MethodPing, nil, nil); !errors.Is(err, ErrClosed) {
-		t.Errorf("Call after Close returned %v, want ErrClosed", err)
-	}
-}
-
-func TestCloseEndsAnActiveStream(t *testing.T) {
-	srv := newTestServer(t, respondOK)
-	client := srv.client()
-	if err := client.Subscribe(context.Background(), []Subscription{{Type: SubTabCreated}}); err != nil {
-		t.Fatalf("Subscribe: %v", err)
-	}
-
-	client.Close()
-
-	select {
-	case _, ok := <-client.Events():
-		if ok {
-			t.Error("an event arrived after Close")
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("the event channel stayed open after Close")
-	}
-}
-
 func TestSessionSnapshotDecodesTheWrapper(t *testing.T) {
-	srv := newTestServer(t, func(req incoming) (string, bool) {
+	srv := newTestServer(t, func(req incoming) string {
 		return `{"id":"` + req.ID + `","result":{"snapshot":{"version":"0.8.2","protocol":20,` +
 			`"tabs":[{"tab_id":"wE:t1","workspace_id":"wE","label":"1","number":1}],` +
-			`"panes":[{"pane_id":"wE:p1","tab_id":"wE:t1","terminal_id":"t","workspace_id":"wE","cwd":"/work/api","focused":true}]}}}`, false
+			`"panes":[{"pane_id":"wE:p1","tab_id":"wE:t1","terminal_id":"t","workspace_id":"wE","cwd":"/work/api","focused":true}]}}}`
 	})
 
 	snapshot, err := SessionSnapshot(context.Background(), srv.client())
@@ -473,13 +237,23 @@ func TestRenameTabSendsTabAndLabel(t *testing.T) {
 }
 
 func TestNullFieldsDecodeAsEmpty(t *testing.T) {
-	var payload PaneUpdatedData
-	raw := `{"type":"pane_updated","pane":{"pane_id":"wE:p1","tab_id":"wE:t1","cwd":null,"terminal_title":null,"agent":null}}`
-	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+	// Herdr sends null for every optional field of a pane running a plain
+	// shell, and a snapshot is full of them.
+	var got snapshotResult
+	raw := `{"snapshot":{"tabs":[{"tab_id":"wE:t1","label":null}],"panes":[
+		{"pane_id":"wE:p1","tab_id":"wE:t1","revision":3,"cwd":null,
+		 "foreground_cwd":null,"terminal_title":null,"terminal_title_stripped":null,
+		 "title":null,"agent":null,"display_agent":null,"agent_status":"unknown"}]}}`
+	if err := json.Unmarshal([]byte(raw), &got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if payload.Pane.CWD != "" || payload.Pane.TerminalTitle != "" || payload.Pane.Agent != "" {
-		t.Errorf("null fields decoded as %+v, want empty strings", payload.Pane)
+
+	pane := got.Snapshot.Panes[0]
+	if pane.CWD != "" || pane.TerminalTitle != "" || pane.Agent != "" || pane.Title != "" {
+		t.Errorf("null pane fields decoded as %+v, want empty strings", pane)
+	}
+	if label := got.Snapshot.Tabs[0].Label; label != "" {
+		t.Errorf("null label decoded as %q, want empty", label)
 	}
 }
 
@@ -500,8 +274,8 @@ func TestSocketPathRequiresTheEnvironment(t *testing.T) {
 }
 
 func TestErrorCode(t *testing.T) {
-	srv := newTestServer(t, func(req incoming) (string, bool) {
-		return `{"id":"` + req.ID + `","error":{"code":"tab_not_found","message":"tab wE:t1 not found"}}`, false
+	srv := newTestServer(t, func(req incoming) string {
+		return `{"id":"` + req.ID + `","error":{"code":"tab_not_found","message":"tab wE:t1 not found"}}`
 	})
 
 	err := RenameTab(context.Background(), srv.client(), "wE:t1", "dashboard")

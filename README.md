@@ -40,75 +40,55 @@ set for you.
 ## Architecture
 
 ```
-Herdr socket (NDJSON)
-        │
-        ▼
-  socket reader ──► event channel ──► event router
-                                          │
-                                          ▼
-                                    session index ◄── session.snapshot
-                                          │            every 2s (sweep)
-                                          ▼
-                                 per-tab debounce (200ms)
-                                          │
-                                          ▼
-                              bounded reconciliation workers
-                                          │
-                                          ▼
-                          read the tab: tab.get + pane.get
-                                          │
-                                          ▼
-                                  deterministic resolver
-                                          │
-                            title differs? ──no──► nothing
-                                          │
-                                         yes
-                                          ▼
-                                     tab.rename
+                    every 500 ms
+                          │
+                          ▼
+                  session.snapshot ──► whole session, one request
+                          │
+                          ▼
+              which panes changed? (revisions)
+                          │
+                          ▼
+              per tab: pick the context pane
+                          │
+                          ▼
+                  deterministic resolver
+                          │
+            title differs? ──no──► nothing
+                          │
+                         yes
+                          ▼
+                     tab.rename
 ```
 
-Auto Title reacts to changes in terminal context; it does not continuously try
-to understand the terminal. There is no scrollback scanning, and the only
-polling is a two-second sweep that exists because Herdr's event stream starts
-out behind.
+Auto Title reads the session twice a second and renames what no longer fits.
+There is no scrollback scanning and no LLM.
 
-- **Bootstrap.** On connect it subscribes to events, calls `session.snapshot`
-  once to seed the index, and reconciles the tabs that already exist.
-- **Events are triggers, not data.** An event says which tab may have changed
-  and nothing more. Subscribing makes Herdr replay a backlog — roughly the last
-  hundred revisions of every pane, about ten a second — so a payload describes
-  some past moment, and a title built from one would name a tab after a file the
-  user closed minutes ago. Only pane identity and revision are kept; the
-  revision is what makes a replayed event recognizable and cheap to ignore.
-- **Read before deciding.** When a tab's timer fires, its state is read back
-  with `tab.get` and one `pane.get` per pane. That read is the only source of a
-  title, so a stale trigger can cost a redundant read and nothing worse. It also
-  supplies the tab's real current label, which is what deduplication compares
-  against.
-- **Sweep.** Events are not enough on their own. Subscribing makes Herdr replay
-  a backlog first, and live events queue behind it, so for the first seconds of
-  a run — about ten per active pane — an event about something the user just did
-  is still waiting behind history. Every two seconds Auto Title therefore takes
-  a `session.snapshot`, which has no such lag and costs one request whatever the
-  session holds. The sweep never renames: it resolves from the snapshot it
-  already has and hands disagreeing tabs to the debouncer, so every rename still
-  goes through the one path that reads before deciding. It also notices tabs and
-  panes that opened or closed while the stream was catching up.
-- **Router.** The socket reader never does expensive work. Events go through a
-  channel to a router that updates the index and arms a timer.
-- **Debounce.** Each tab has its own 200 ms timer. A burst of events on one tab
-  produces exactly one reconciliation once the burst settles; tabs never block
-  each other. A burst can also be *endless* — a pane running an agent emits an
-  update roughly every 100 ms for as long as the agent works — so an action
-  always runs within five debounce windows of the first event, however long the
-  burst lasts. Without that cap such a tab would never be titled at all. Raising
-  `HERDR_AUTO_TITLE_DEBOUNCE_MS` raises the cap with it, which is the way to
-  calm a tab that renames more often than you would like.
+- **Polling, not events.** Herdr exposes an event stream and Auto Title
+  deliberately ignores it. Subscribing replays a backlog before delivering
+  anything live — measured at roughly the last 95 revisions of *every* pane,
+  about ten a second, so some ten seconds of history per active pane — and live
+  events queue behind it: a change made two seconds after subscribing arrived
+  thirteen seconds later. The protocol offers no cursor to skip it. A snapshot
+  describes the present, costs one request whatever the session holds, and
+  carries every field the resolver reads. See
+  [*Notes on the Herdr socket API*](#notes-on-the-herdr-socket-api).
+- **Cost.** A snapshot of a six-pane session measured 0.47 ms and 6 KB, so two
+  polls a second come to about a thousandth of a core.
+- **Almost no state.** Each poll builds what it needs and discards it. The one
+  thing carried forward is when each pane last changed — a snapshot says what a
+  pane holds but not when that became true, and a tab with several panes and no
+  focus is named after whichever moved last. Herdr's pane revisions are
+  monotonic, so comparing polls answers that.
+- **The interval is the rename rate.** A tab changes name at most once per poll,
+  however fast its pane is churning. Raising
+  `HERDR_AUTO_TITLE_POLL_MS` calms a tab that renames more often than you would
+  like; lowering it makes renames land sooner.
 - **Resolver.** Deterministic — identical state always yields an identical
   title. Every candidate value is treated as untrusted input.
-- **Deduplication.** If the resolved title equals the tab's current title, no
-  rename request is sent at all. This is what keeps rename → `tab_renamed` →
-  resolve from becoming a loop.
+- **Deduplication.** The snapshot reports each tab's current label, and a rename
+  is skipped when the resolved title already equals it. This is what keeps the
+  loop quiet, and what stops a rename from provoking the next one.
 
 ### Title sources
 
@@ -176,9 +156,8 @@ an unusable value is logged as a warning and the default is kept.
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `HERDR_AUTO_TITLE_DEBUG` | `false` | Log at DEBUG instead of INFO |
-| `HERDR_AUTO_TITLE_DEBOUNCE_MS` | `200` | Per-tab debounce window; the cap on a continuous burst is five times this |
+| `HERDR_AUTO_TITLE_POLL_MS` | `500` | How often the session is read; also the fastest a tab can be renamed |
 | `HERDR_AUTO_TITLE_MAX_LENGTH` | `64` | Maximum title length in characters |
-| `HERDR_AUTO_TITLE_SWEEP_MS` | `2000` | How often the session is swept for changes the event stream has not caught up with; `0` turns sweeping off |
 
 Auto Title logs to stderr through `log/slog`. Raw terminal output and command
 arguments are never logged.
@@ -190,18 +169,15 @@ Auto Title has to be started by Herdr, or from inside a Herdr pane where the
 variable is already exported.
 
 **Nothing is renamed.**
-Run with `HERDR_AUTO_TITLE_DEBUG=1` and watch stderr. `event received` lines
-confirm the subscription is live; `title unchanged` means the resolver produced
-exactly the title the tab already has.
-
-**A busy tab is titled a second late.**
-Reconciliation for a continuously updating pane runs on the cap — five debounce
-windows, one second by default — rather than on the quiet window. That is the
-cap doing its job.
+That is the normal state once every tab carries the name it should — the loop
+logs only when it acts. Run with `HERDR_AUTO_TITLE_DEBUG=1` and watch stderr:
+`poll failed` means the snapshot is not coming back, and silence otherwise means
+the resolver keeps producing the title each tab already has.
 
 **A tab renames every time I switch files in my editor.**
 Expected: the tab follows the editor's title, which follows the buffer. Raise
-`HERDR_AUTO_TITLE_DEBOUNCE_MS` to slow it down.
+`HERDR_AUTO_TITLE_POLL_MS` to slow it down — the interval is also the fastest a
+tab can change name.
 
 **A tab keeps the name I gave it.**
 That is intended once manual rename protection lands. In this slice Auto Title
@@ -213,9 +189,10 @@ The pane's working directory is the home directory or the filesystem root, which
 carry no context. Later slices add process, agent and terminal-title sources
 that name such tabs by what is running in them.
 
-**The plugin stops after Herdr restarts.**
-Reconnect is a later slice. For now a dropped socket ends the process with the
-reason logged; restart Herdr's session or relaunch the binary.
+**The plugin survives a Herdr restart.**
+Every poll dials a fresh connection, so there is nothing to reconnect: failed
+polls are logged and the loop keeps trying. Only a failure of the very first
+poll ends the process, because there is nothing to run for.
 
 ## Development
 
@@ -226,14 +203,14 @@ make run      # build and run in your Herdr session with DEBUG logging
 make dev      # the same, restarting on every source change
 ```
 
-The test suite drives the whole pipeline through a fake Herdr client
-(`internal/herdr.FakeClient`), so tab creation, context changes, debounce
-collapsing, deduplication and disconnects are all exercised without a running
-Herdr.
+The test suite drives the whole loop through a stub Herdr client
+(`internal/herdr.StubClient`), so a tab appearing, its context changing,
+deduplication and failed calls are all exercised without a running Herdr.
 
 `scripts/probe.py` (wrapped by the `make probe-*` targets) inspects the live
-socket: accepted subscription types, the raw event stream, the bootstrap
-snapshot. Use it before assuming anything about the API.
+socket: the session snapshot, and — as a diagnostic for a stream the plugin does
+not use — the accepted subscription types and the raw events. Use it before
+assuming anything about the API.
 
 The full workflow — the three loops, the rules for running against your own
 session, and what each log line means — is in
@@ -247,32 +224,39 @@ Verified against Herdr 0.8.2, protocol 20:
   `HERDR_SOCKET_PATH`. Requests are `{"id","method","params"}` — `params` is
   required even when empty — and replies are `{"id","result"}` or
   `{"id","error"}`.
-- Subscription types use dot notation (`pane.updated`) while the events they
-  deliver arrive with snake_case kinds (`pane_updated`), wrapped as
-  `{"event": "...", "data": {...}}`.
-- `pane_closed` carries only `pane_id` and `workspace_id`, so the cache indexes
-  panes by ID as well as by tab.
+- **One request per connection.** Herdr closes it after answering, so every call
+  dials its own. Auto Title uses exactly two methods: `session.snapshot` and
+  `tab.rename`.
+- `session.snapshot` returns the whole session — every tab with its label, every
+  pane with its directory, terminal title, agent and agent status. Measured at
+  0.47 ms and 6 KB for six panes.
+- **On subscribe, Herdr replays a backlog** before delivering anything live:
+  roughly the last 95 revisions of every pane, paced at about ten a second, so
+  around ten seconds of history for each active pane, closed panes included.
+  Live events queue behind it — a change made two seconds after subscribing was
+  observed arriving thirteen seconds later. There is no way to skip it:
+  `events.subscribe` takes only a subscription list, event envelopes carry no
+  timestamp or sequence number, and no method exposes a cursor. This is why Auto
+  Title polls.
+- Subscription types would use dot notation (`pane.updated`) while the events
+  they deliver arrive with snake_case kinds (`pane_updated`), wrapped as
+  `{"event": "...", "data": {...}}`. `pane.output_changed` is a real event kind
+  but is **not** an accepted subscription type. `pane.agent_status_changed`,
+  `pane.scroll_changed` and `pane.output_matched` are **per-pane** and rejected
+  without a `pane_id`; `pane.agent_detected` is global.
+- `pane_closed` and `pane_agent_detected` carry only pane identifiers — neither
+  names the tab.
 - `PaneInfo` does **not** include the foreground process name; that requires the
   separate `pane.process_info` method.
-- `pane.agent_status_changed` is a **per-pane** subscription and is rejected
-  without a `pane_id`; so are `pane.scroll_changed` and `pane.output_matched`.
-  Auto Title needs none of them: `pane_updated` resends the whole `PaneInfo`,
-  agent fields included, whenever an agent's status or title changes.
-  `pane.agent_detected` is global.
-- `pane_agent_detected` carries only `pane_id`, `workspace_id`, `agent`,
-  `final_status` and `released` — like `pane_closed` it does not name the tab.
+- `PaneInfo.title` is the agent's own title, and Herdr left it null for every
+  Claude Code pane observed; that agent reports its topic through
+  `terminal_title_stripped` instead.
 - `agent_status` is one of `idle`, `working`, `blocked`, `done`, `unknown`. Every
   pane carries one; a pane with no agent reports `unknown`.
-- On subscribe, Herdr replays a backlog of pane updates before the live ones —
-  measured at roughly the last 95 revisions **per pane**, delivered about ten a
-  second, so the drain costs about ten seconds for every active pane. Live
-  events queue behind it: a change made two seconds after subscribing was
-  observed arriving thirteen seconds later. `events.subscribe` offers no way to
-  opt out — its only parameter is the subscription list, event envelopes carry
-  no timestamp or sequence number, and no method exposes a cursor. This is why
-  events are treated as triggers and state is read on demand.
-- `tab.get` and `pane.get` read one object each and answer with the present.
-  `pane.list` filters by workspace only, not by tab.
+- Pane revisions are monotonic per pane, which is how one poll tells which panes
+  moved since the last.
+- `tab.get` and `pane.get` read one object each; `pane.list` filters by
+  workspace only, not by tab.
 - A malformed request is answered with an uncorrelated error frame and the
   connection is then closed.
 
