@@ -32,6 +32,12 @@ const (
 // snake_case kinds. pane.closed is included so a closing pane leaves no stale
 // context behind — pane_closed does not name its tab, which is why the cache
 // indexes panes by ID as well.
+//
+// Every type here is global. Agent context needs no per-pane subscription:
+// pane_updated carries the whole PaneInfo, agent fields included, and Herdr
+// bumps the pane revision when an agent's status or title changes.
+// pane.agent_detected is subscribed to as well because it announces an agent
+// before the pane update that would otherwise be the first sign of one.
 func Subscriptions() []herdr.Subscription {
 	return []herdr.Subscription{
 		{Type: herdr.SubTabCreated},
@@ -39,6 +45,7 @@ func Subscriptions() []herdr.Subscription {
 		{Type: herdr.SubPaneCreated},
 		{Type: herdr.SubPaneUpdated},
 		{Type: herdr.SubPaneClosed},
+		{Type: herdr.SubPaneAgentDetected},
 	}
 }
 
@@ -175,6 +182,17 @@ func (a *App) handleEvent(event herdr.Event) {
 		}
 		a.log.Debug("event received", "type", event.Kind, "pane_id", data.Pane.PaneID)
 		if tabID := a.cache.UpsertPane(data.Pane); tabID != "" {
+			a.debouncer.Schedule(tabID)
+		}
+
+	case herdr.EventPaneAgentDetected:
+		data, ok := decodeEvent[herdr.PaneAgentDetectedData](a.log, event)
+		if !ok {
+			return
+		}
+		a.log.Debug("event received", "type", event.Kind,
+			"pane_id", data.PaneID, "agent", data.Agent, "released", data.Released)
+		if tabID := a.cache.SetPaneAgent(data); tabID != "" {
 			a.debouncer.Schedule(tabID)
 		}
 

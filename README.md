@@ -96,13 +96,14 @@ one.
 | Priority | Source | Status |
 |---------:|--------|--------|
 | 1 | Manual rename protection | later slice |
-| 2 | Meaningful agent title | later slice |
+| 2 | Meaningful agent title | **implemented** |
 | 3 | Meaningful terminal title | **implemented** |
 | 4 | Known foreground process | later slice |
 | 5 | SSH session | later slice |
 | 6 | Git context | later slice |
 | 7 | Working directory | **implemented** |
-| 8 | Generic fallback (`Shell`) | **implemented** |
+| 8 | Agent name | **implemented** |
+| 9 | Generic fallback (`Shell`) | **implemented** |
 
 A value is cleaned before it becomes part of a title, and a source declines when
 nothing useful survives. Cleaning removes locations — absolute paths,
@@ -111,11 +112,34 @@ is, and a path is long enough to push the useful part past the length limit. An
 editor titling its window `auth.ts (~/work/dashboard/src) - Nvim` contributes
 `auth.ts - Nvim`; a shell titling it `~` contributes nothing. Relative paths
 survive, so `Fix bug in src/auth.ts` stays intact. On top of that, a value that
-only names a program or a shell — `zsh`, `node`, `Claude Code` — is rejected
-outright.
+only names a program or a shell — `zsh`, `node`, `Claude Code`, `Agent` — is
+rejected outright. An agent that echoes its own name is rejected too, whatever
+that name is: it is compared against the agent Herdr recognized in the pane
+rather than against the table.
+
+A tab whose panes disagree is named after one of them, never after a blend of
+both. The pane that speaks for the tab is the focused one; failing that, the one
+running an agent that is working or waiting on the user; failing that, the most
+recently updated. Both halves of the name then come from that pane alone.
+
+On this Herdr the agent's own title field is rarely populated — `PaneInfo.title`
+was null for every Claude Code pane observed — and the agent expresses what it is
+working on through the terminal title instead. The agent source is what reads the
+field when an agent does set it; in practice most agent context arrives one rung
+lower, through the terminal title.
+
+An agent has no topic to report the moment it starts, and Claude Code titles its
+window `Claude Code` until the conversation has a subject. That name is generic
+everywhere else, but on a pane that genuinely runs the agent it is the one thing
+worth saying, so the bottom rung of the chain says it: a tab with an idle agent
+reads `dashboard · Claude Code` while a plain shell in the same directory reads
+`dashboard`. It fills only an activity nothing else claimed, and the sources
+above take over the moment the agent has something to report. The name comes from
+Herdr's `display_agent` when there is one, from the terminal title when the agent
+titled its window after itself, and from the matched identifier otherwise.
 
 Every value that reaches a title — a directory name, a terminal title, an agent
-title later — is stripped of ANSI escapes and control characters, whitespace
+title — is stripped of ANSI escapes and control characters, whitespace
 is normalized, repeated separators are collapsed, and the result is truncated to
 the maximum length. Nothing derived from terminal output is ever passed to a
 shell: renames go over the socket API, never through `sh -c`.
@@ -205,6 +229,18 @@ Verified against Herdr 0.8.2, protocol 20:
   panes by ID as well as by tab.
 - `PaneInfo` does **not** include the foreground process name; that requires the
   separate `pane.process_info` method.
+- `pane.agent_status_changed` is a **per-pane** subscription and is rejected
+  without a `pane_id`; so are `pane.scroll_changed` and `pane.output_matched`.
+  Auto Title needs none of them: `pane_updated` resends the whole `PaneInfo`,
+  agent fields included, whenever an agent's status or title changes.
+  `pane.agent_detected` is global.
+- `pane_agent_detected` carries only `pane_id`, `workspace_id`, `agent`,
+  `final_status` and `released` — like `pane_closed` it does not name the tab.
+- `agent_status` is one of `idle`, `working`, `blocked`, `done`, `unknown`. Every
+  pane carries one; a pane with no agent reports `unknown`.
+- On subscribe, Herdr replays recent pane events before the live ones, so the
+  same revisions arrive again on every new subscription. Cache updates are
+  idempotent, and the replay costs one extra reconciliation per tab.
 - A malformed request is answered with an uncorrelated error frame and the
   connection is then closed.
 

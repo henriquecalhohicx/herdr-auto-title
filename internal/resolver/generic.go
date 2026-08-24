@@ -23,8 +23,10 @@ var genericValues = map[string]struct{}{
 	"terminal": {},
 	"node":     {},
 	// Agents naming themselves instead of their work.
-	"claude":      {},
-	"claude code": {},
+	"claude":       {},
+	"claude code":  {},
+	"agent":        {},
+	"coding agent": {},
 }
 
 // uriPattern matches a scheme-qualified location such as oil:///home/dev.

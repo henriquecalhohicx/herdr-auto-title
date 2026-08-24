@@ -66,6 +66,16 @@ listed here** (`make probe-*`, `scripts/probe.py`).
 - `pane.output_changed` is a real event kind but is **not** an accepted
   subscription type. `pane.agent_status_changed`, `pane.scroll_changed` and
   `pane.output_matched` are per-pane subscriptions and require a `pane_id`.
+- Per-pane subscriptions are **not needed for agent context**: `pane_updated`
+  resends the whole `PaneInfo`, agent fields included, whenever an agent's
+  status or title changes. `pane.agent_detected` is global and carries only
+  `pane_id`, `workspace_id`, `agent`, `final_status`, `released` — no tab.
+- `PaneInfo.title` is the agent's own title. It was null for every Claude Code
+  pane observed; that agent reports its topic through `terminal_title_stripped`.
+- `agent_status` is `idle | working | blocked | done | unknown`; a pane with no
+  agent reports `unknown`.
+- Subscribing replays recent pane events before the live ones, so the same
+  revisions arrive again on every new subscription.
 - `PaneInfo` carries no foreground process name; that needs `pane.process_info`.
 - `pane_closed` names only the pane, not its tab — the cache indexes panes by ID.
 

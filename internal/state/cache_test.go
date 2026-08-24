@@ -165,3 +165,79 @@ func TestCacheIsConcurrencySafe(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestUpsertPaneRecordsAgentContext(t *testing.T) {
+	c := NewCache()
+	c.UpsertPane(herdr.PaneInfo{
+		PaneID:       "wE:p1",
+		TabID:        "wE:t1",
+		Agent:        "claude",
+		DisplayAgent: "Claude Code",
+		AgentStatus:  herdr.AgentStatusWorking,
+		Title:        "Implement OAuth scopes",
+		AgentSession: &herdr.AgentSessionInfo{
+			Source: "cli", Agent: "claude", Kind: "id", Value: "sess-42",
+		},
+	})
+
+	tab, _ := c.Tab("wE:t1")
+	pane := tab.Panes["wE:p1"]
+	switch {
+	case pane.Agent != "claude":
+		t.Errorf("agent = %q, want claude", pane.Agent)
+	case pane.DisplayAgent != "Claude Code":
+		t.Errorf("display agent = %q, want %q", pane.DisplayAgent, "Claude Code")
+	case pane.AgentTitle != "Implement OAuth scopes":
+		t.Errorf("agent title = %q, want %q", pane.AgentTitle, "Implement OAuth scopes")
+	case pane.AgentStatus != herdr.AgentStatusWorking:
+		t.Errorf("agent status = %q, want working", pane.AgentStatus)
+	case pane.AgentSession != "sess-42":
+		t.Errorf("agent session = %q, want sess-42", pane.AgentSession)
+	}
+}
+
+func TestUpsertPaneWithoutAnAgent(t *testing.T) {
+	// Herdr sends null for every agent field of a pane running a plain shell.
+	c := NewCache()
+	c.UpsertPane(herdr.PaneInfo{PaneID: "wE:p1", TabID: "wE:t1", AgentStatus: herdr.AgentStatusUnknown})
+
+	tab, _ := c.Tab("wE:t1")
+	pane := tab.Panes["wE:p1"]
+	if pane.HasAgent() || pane.AgentSession != "" {
+		t.Fatalf("pane %+v reported an agent", pane)
+	}
+}
+
+func TestSetPaneAgentDetectsAndReleases(t *testing.T) {
+	c := NewCache()
+	c.UpsertPane(herdr.PaneInfo{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/work/dashboard"})
+
+	if got := c.SetPaneAgent(herdr.PaneAgentDetectedData{PaneID: "wE:p1", Agent: "claude"}); got != "wE:t1" {
+		t.Fatalf("detection returned tab %q, want wE:t1", got)
+	}
+	tab, _ := c.Tab("wE:t1")
+	if pane := tab.Panes["wE:p1"]; !pane.HasAgent() {
+		t.Fatalf("pane %+v has no agent after detection", pane)
+	}
+
+	// The event carries nothing but the agent; the rest of the pane survives.
+	if got := tab.Panes["wE:p1"].CWD; got != "/work/dashboard" {
+		t.Errorf("cwd = %q, want /work/dashboard", got)
+	}
+
+	if got := c.SetPaneAgent(herdr.PaneAgentDetectedData{PaneID: "wE:p1", Released: true}); got != "wE:t1" {
+		t.Fatalf("release returned tab %q, want wE:t1", got)
+	}
+	tab, _ = c.Tab("wE:t1")
+	pane := tab.Panes["wE:p1"]
+	if pane.HasAgent() || pane.AgentTitle != "" || pane.AgentStatus != herdr.AgentStatusUnknown {
+		t.Fatalf("released pane still carries agent context: %+v", pane)
+	}
+}
+
+func TestSetPaneAgentOnAnUnknownPane(t *testing.T) {
+	c := NewCache()
+	if got := c.SetPaneAgent(herdr.PaneAgentDetectedData{PaneID: "wE:p9", Agent: "claude"}); got != "" {
+		t.Fatalf("returned tab %q for a pane that was never cached", got)
+	}
+}

@@ -123,7 +123,10 @@ func (c *Cache) putPaneLocked(pane herdr.PaneInfo) string {
 		TerminalTitle:    pane.TerminalTitleStripped,
 		TerminalTitleRaw: pane.TerminalTitle,
 		Agent:            pane.Agent,
+		DisplayAgent:     pane.DisplayAgent,
+		AgentTitle:       pane.Title,
 		AgentStatus:      pane.AgentStatus,
+		AgentSession:     agentSessionValue(pane.AgentSession),
 		Focused:          pane.Focused,
 		Revision:         pane.Revision,
 		UpdatedAt:        c.now(),
@@ -131,6 +134,63 @@ func (c *Cache) putPaneLocked(pane herdr.PaneInfo) string {
 	tab.Revision++
 	c.paneTab[pane.PaneID] = pane.TabID
 	return pane.TabID
+}
+
+// agentSessionValue extracts the session reference Herdr matched to a pane.
+// The field is nullable, and Auto Title only records the value: no transcript
+// is ever opened.
+func agentSessionValue(session *herdr.AgentSessionInfo) string {
+	if session == nil {
+		return ""
+	}
+	return session.Value
+}
+
+// SetPaneAgent records what pane_agent_detected reported and returns the tab
+// the pane belongs to.
+//
+// The event names only the pane, so the tab comes from the pane index, and it
+// carries no other pane context — the fields it does not mention are left as
+// the last pane update set them.
+func (c *Cache) SetPaneAgent(data herdr.PaneAgentDetectedData) (tabID string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	pane, tabID := c.paneLocked(data.PaneID)
+	if pane == nil {
+		return ""
+	}
+
+	if data.Released {
+		// The agent is gone; what it was working on is no longer the truth
+		// about this pane.
+		pane.Agent = ""
+		pane.DisplayAgent = ""
+		pane.AgentTitle = ""
+		pane.AgentSession = ""
+		pane.AgentStatus = herdr.AgentStatusUnknown
+	} else {
+		pane.Agent = data.Agent
+	}
+	pane.UpdatedAt = c.now()
+	return tabID
+}
+
+// paneLocked finds a pane and its tab through the pane index.
+func (c *Cache) paneLocked(paneID string) (*PaneState, string) {
+	tabID, ok := c.paneTab[paneID]
+	if !ok {
+		return nil, ""
+	}
+	tab, ok := c.tabs[tabID]
+	if !ok {
+		return nil, ""
+	}
+	pane, ok := tab.Panes[paneID]
+	if !ok {
+		return nil, ""
+	}
+	return pane, tabID
 }
 
 // RemovePane drops a pane and returns the tab it belonged to.

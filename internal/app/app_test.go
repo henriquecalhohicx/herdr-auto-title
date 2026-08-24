@@ -116,16 +116,22 @@ func TestBootstrapSubscribesToTheExpectedEvents(t *testing.T) {
 
 	got := h.client.Subscriptions()
 	want := map[string]bool{
-		herdr.SubTabCreated:  false,
-		herdr.SubTabClosed:   false,
-		herdr.SubPaneCreated: false,
-		herdr.SubPaneUpdated: false,
-		herdr.SubPaneClosed:  false,
+		herdr.SubTabCreated:        false,
+		herdr.SubTabClosed:         false,
+		herdr.SubPaneCreated:       false,
+		herdr.SubPaneUpdated:       false,
+		herdr.SubPaneClosed:        false,
+		herdr.SubPaneAgentDetected: false,
 	}
 	for _, sub := range got {
 		if _, ok := want[sub.Type]; !ok {
 			t.Errorf("unexpected subscription %q", sub.Type)
 			continue
+		}
+		// A per-pane subscription would need a pane id and a connection of its
+		// own; every stream Auto Title needs is global.
+		if sub.PaneID != "" {
+			t.Errorf("subscription %q is scoped to pane %q", sub.Type, sub.PaneID)
 		}
 		want[sub.Type] = true
 	}
@@ -500,4 +506,112 @@ func TestTerminalTitleFlowsThroughEvents(t *testing.T) {
 	if renames[2].Label != "dashboard" {
 		t.Errorf("label = %q, want dashboard", renames[2].Label)
 	}
+}
+
+func TestAgentStatusChangeArrivesThroughPaneUpdated(t *testing.T) {
+	// Herdr offers no global pane.agent_status_changed subscription, so agent
+	// context has to reach Auto Title through pane_updated. It does: the whole
+	// PaneInfo is resent, agent fields included.
+	h := start(t, herdr.Snapshot{
+		Tabs: []herdr.TabInfo{{TabID: "wE:t1", WorkspaceID: "wE", Label: "1"}},
+		Panes: []herdr.PaneInfo{
+			{PaneID: "wE:p1", TabID: "wE:t1", WorkspaceID: "wE", CWD: "/Users/dev/work/dashboard", Focused: true},
+		},
+	})
+
+	if got := h.awaitRenames(1)[0].Label; got != "dashboard" {
+		t.Fatalf("bootstrap rename = %q, want dashboard", got)
+	}
+
+	h.client.Emit(herdr.EventPaneUpdated, herdr.PaneUpdatedData{
+		Pane: herdr.PaneInfo{
+			PaneID: "wE:p1", TabID: "wE:t1", WorkspaceID: "wE",
+			CWD: "/Users/dev/work/dashboard", Focused: true,
+			Agent:       "claude",
+			AgentStatus: herdr.AgentStatusWorking,
+			Title:       "Implement OAuth scopes",
+		},
+	})
+
+	renames := h.awaitRenames(2)
+	if want := "dashboard · Implement OAuth scopes"; renames[1].Label != want {
+		t.Errorf("rename = %q, want %q", renames[1].Label, want)
+	}
+}
+
+func TestAgentDetectionRetitlesTheTab(t *testing.T) {
+	// pane_agent_detected names only the pane, so the tab has to be found
+	// through the cache's pane index.
+	h := start(t, herdr.Snapshot{
+		Tabs: []herdr.TabInfo{{TabID: "wE:t1", WorkspaceID: "wE", Label: "1"}},
+		Panes: []herdr.PaneInfo{
+			{
+				PaneID: "wE:p1", TabID: "wE:t1", WorkspaceID: "wE",
+				CWD: "/Users/dev/work/dashboard", Focused: true,
+				Title: "Implement OAuth scopes",
+			},
+		},
+	})
+
+	// Without a recognized agent the leftover title is not agent context.
+	if got := h.awaitRenames(1)[0].Label; got != "dashboard" {
+		t.Fatalf("bootstrap rename = %q, want dashboard", got)
+	}
+
+	h.client.Emit(herdr.EventPaneAgentDetected, herdr.PaneAgentDetectedData{
+		PaneID: "wE:p1", WorkspaceID: "wE", Agent: "claude",
+	})
+
+	renames := h.awaitRenames(2)
+	if want := "dashboard · Implement OAuth scopes"; renames[1].Label != want {
+		t.Errorf("rename = %q, want %q", renames[1].Label, want)
+	}
+}
+
+func TestReleasedAgentDropsItsContext(t *testing.T) {
+	h := start(t, herdr.Snapshot{
+		Tabs: []herdr.TabInfo{{TabID: "wE:t1", WorkspaceID: "wE", Label: "1"}},
+		Panes: []herdr.PaneInfo{
+			{
+				PaneID: "wE:p1", TabID: "wE:t1", WorkspaceID: "wE",
+				CWD: "/Users/dev/work/dashboard", Focused: true,
+				Agent:       "claude",
+				AgentStatus: herdr.AgentStatusWorking,
+				Title:       "Implement OAuth scopes",
+			},
+		},
+	})
+
+	if want := "dashboard · Implement OAuth scopes"; h.awaitRenames(1)[0].Label != want {
+		t.Fatalf("bootstrap rename = %q, want %q", h.awaitRenames(1)[0].Label, want)
+	}
+
+	h.client.Emit(herdr.EventPaneAgentDetected, herdr.PaneAgentDetectedData{
+		PaneID: "wE:p1", WorkspaceID: "wE", Released: true, FinalStatus: herdr.AgentStatusDone,
+	})
+
+	renames := h.awaitRenames(2)
+	if renames[1].Label != "dashboard" {
+		t.Errorf("rename = %q, want dashboard", renames[1].Label)
+	}
+}
+
+func TestNullAgentFieldsAreSurvivable(t *testing.T) {
+	// Every agent field is nullable on the wire, agent_session included.
+	h := start(t, herdr.Snapshot{
+		Tabs:  []herdr.TabInfo{{TabID: "wE:t1", WorkspaceID: "wE", Label: "1"}},
+		Panes: []herdr.PaneInfo{{PaneID: "wE:p1", TabID: "wE:t1", WorkspaceID: "wE", Focused: true}},
+	})
+
+	h.client.EmitRaw(herdr.EventPaneUpdated, `{"pane":{
+		"pane_id":"wE:p1","tab_id":"wE:t1","workspace_id":"wE","terminal_id":"t",
+		"focused":true,"revision":2,"cwd":"/Users/dev/work/dashboard",
+		"foreground_cwd":null,"terminal_title":null,"terminal_title_stripped":null,
+		"title":null,"agent":null,"display_agent":null,"agent_status":"unknown",
+		"agent_session":null,"state_labels":{}}}`)
+
+	if got := h.awaitRenames(1)[0].Label; got != "dashboard" {
+		t.Errorf("rename = %q, want dashboard", got)
+	}
+	h.settle()
 }

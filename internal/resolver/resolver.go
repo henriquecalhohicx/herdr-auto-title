@@ -22,6 +22,7 @@ const GenericFallback = "Shell"
 // source already supplied.
 const (
 	ConfidenceFallback      = 10
+	ConfidenceAgentName     = 20
 	ConfidenceCWD           = 30
 	ConfidenceGit           = 40
 	ConfidenceSSH           = 60
@@ -80,8 +81,10 @@ func New(maxLength int, sources ...Source) *Deterministic {
 // the tests can never drift apart on what the chain contains.
 func Default(maxLength int) *Deterministic {
 	return New(maxLength,
+		Agent{},
 		TerminalTitle{},
 		NewCWD(),
+		AgentName{},
 	)
 }
 

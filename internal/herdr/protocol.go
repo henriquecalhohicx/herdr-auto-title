@@ -73,8 +73,12 @@ const (
 // Subscription selects one event stream. Subscription types use dot notation
 // ("pane.updated") while the events they deliver arrive with snake_case kinds
 // ("pane_updated"); see the Event* constants.
+//
+// Most types are global. A few — pane.agent_status_changed, pane.scroll_changed,
+// pane.output_matched — are per-pane and are rejected without a PaneID.
 type Subscription struct {
-	Type string `json:"type"`
+	Type   string `json:"type"`
+	PaneID string `json:"pane_id,omitempty"`
 }
 
 // Subscription types Auto Title subscribes to.
@@ -84,6 +88,9 @@ const (
 	SubPaneCreated = "pane.created"
 	SubPaneUpdated = "pane.updated"
 	SubPaneClosed  = "pane.closed"
+	// SubPaneAgentDetected is global; it fires when Herdr starts or stops
+	// recognizing an agent in a pane.
+	SubPaneAgentDetected = "pane.agent_detected"
 )
 
 type subscribeParams struct {
