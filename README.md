@@ -102,7 +102,7 @@ one.
 | 1 | Manual rename protection | later slice |
 | 2 | Meaningful agent title | **implemented** |
 | 3 | Meaningful terminal title | **implemented** |
-| 4 | Known foreground process | later slice |
+| 4 | Known foreground process | **implemented** |
 | 5 | SSH session | **implemented** |
 | 6 | Git context | **implemented** |
 | 7 | Working directory | **implemented** |
@@ -133,6 +133,20 @@ was null for every Claude Code pane observed — and the agent expresses what it
 working on through the terminal title instead. The agent source is what reads the
 field when an agent does set it; in practice most agent context arrives one rung
 lower, through the terminal title.
+
+Two separators, and they mean different things. A middle dot separates where
+from what: `self-care-portal · yarn dev`. A colon binds a kind of thing to the
+particular one: `nvim:auth.provider.ts`. A project name never takes a colon,
+because a project is a place rather than a kind.
+
+The kind comes from the process table, not from the shape of a title, and only
+when a pane runs a single program: an editor reports as `nvim`, while a build
+tool reports as `esbuild` and five `node`s and an agent as half a dozen helpers.
+Picking one of those would be guesswork, and such a pane already has a terminal
+title saying what it is doing. A kind that has nothing to add stands alone —
+`dashboard · nvim` for an editor with no file open — and a title that already
+carries its program's name loses it, since `nvim:auth.provider.ts - Nvim` says
+the same thing twice.
 
 A pane running `ssh` is named after the machine it reached, not the directory it
 was launched from: `ssh:prod-01`, and `ssh:prod-01 · Restart the queue workers`

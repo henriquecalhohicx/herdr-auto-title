@@ -8,6 +8,11 @@ import "herdr-auto-title/internal/state"
 // set usually says what is happening, while the directory only says where. It
 // contributes an activity and no context, so a meaningful title combines with
 // the directory into `<context> · <activity>`.
+//
+// When the pane names a single program, that program qualifies the title:
+// `nvim:auth.provider.ts` rather than `auth.provider.ts - Nvim`. The program is
+// read from the process table rather than guessed at from the title's shape,
+// and the title then loses the name it was already carrying.
 type TerminalTitle struct{}
 
 var _ Source = TerminalTitle{}
@@ -31,5 +36,16 @@ func (TerminalTitle) Resolve(pane *state.PaneState) (Parts, bool) {
 	if !ok {
 		return Parts{}, false
 	}
-	return Parts{Activity: activity, Confidence: ConfidenceTerminalTitle}, true
+
+	kind := processKind(pane)
+	if kind == "" {
+		return Parts{Activity: activity, Confidence: ConfidenceTerminalTitle}, true
+	}
+
+	detail := stripKind(activity, kind)
+	if detail == "" {
+		// The title said nothing the kind does not already say.
+		return Parts{Activity: kind, Confidence: ConfidenceTerminalTitle}, true
+	}
+	return Parts{Activity: kind + KindSeparator + detail, Confidence: ConfidenceTerminalTitle}, true
 }

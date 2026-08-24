@@ -104,8 +104,9 @@ func TestAPaneWithoutSSHIsUnaffected(t *testing.T) {
 		},
 	}
 
-	if got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane)); got.Name != "dashboard" {
-		t.Errorf("name = %q, want dashboard", got.Name)
+	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
+	if strings.Contains(got.Name, "ssh") || strings.Contains(got.Name, SSHActivity) {
+		t.Errorf("name = %q, want nothing about ssh", got.Name)
 	}
 }
 

@@ -85,6 +85,7 @@ func Default(maxLength, branchMax int) *Deterministic {
 	return New(maxLength,
 		Agent{},
 		TerminalTitle{},
+		Process{},
 		SSH{},
 		NewGit(branchMax),
 		NewCWD(),
