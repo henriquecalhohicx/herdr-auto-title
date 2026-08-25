@@ -5,7 +5,6 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
-	"sort"
 	"sync"
 )
 
@@ -159,19 +158,8 @@ func (m *Manual) saveLocked() {
 		return
 	}
 
-	// Sorted keys keep the file diffable.
-	ids := make([]string, 0, len(m.locked))
-	for id := range m.locked {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
-
-	stored := manualFile{Locked: make(map[string]string, len(ids))}
-	for _, id := range ids {
-		stored.Locked[id] = m.locked[id]
-	}
-
-	raw, err := json.MarshalIndent(stored, "", "  ")
+	// encoding/json sorts map keys itself, so the file is diffable already.
+	raw, err := json.MarshalIndent(manualFile{Locked: m.locked}, "", "  ")
 	if err != nil {
 		return
 	}
