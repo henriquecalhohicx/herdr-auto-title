@@ -39,6 +39,21 @@ something working that nothing exercises. Add a field when the code that reads
 it lands in the same change, and delete a field the moment its last reader goes.
 The same holds for methods, constants and event payload types.
 
+## Script rule (mandatory)
+
+**Everything in `scripts/` is Python 3 and uses the standard library only.**
+Shell stays where it belongs: the one-line recipes in the Makefile. Anything
+with a loop, a branch or a data structure is a Python script.
+
+Two scripting languages in one repository means two sets of portability traps to
+remember — `stat -f` against `stat -c`, `trap` against signal handlers, quoting
+rules that differ per shell — for tooling nobody should have to think about.
+Python was already here for the probes, so it is what the rest is written in.
+
+Each script is executable, opens with `#!/usr/bin/env python3` and a module
+docstring saying what it is for, and takes no dependency outside the standard
+library.
+
 ## Commands
 
 ```sh
