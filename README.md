@@ -31,6 +31,10 @@ herdr plugin install kryptamine/herdr-auto-title
 That is the whole setup. Herdr clones the repository, builds the binary and
 starts it; `herdr plugin list` shows it, `herdr plugin disable` turns it off.
 
+Working on the plugin rather than using it? [Development](docs/development.md)
+covers linking a local checkout, which Herdr makes you unlink before `install`
+will run.
+
 ## What your tabs will be called
 
 ```
