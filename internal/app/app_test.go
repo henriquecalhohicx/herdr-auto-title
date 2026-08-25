@@ -300,7 +300,7 @@ func TestAgentContextNamesTheTab(t *testing.T) {
 		}},
 	)
 
-	if want := "dashboard · Implement OAuth scopes"; h.awaitRenames(1)[0].Label != want {
+	if want := "dashboard · claude:Implement OAuth scopes"; h.awaitRenames(1)[0].Label != want {
 		t.Errorf("rename = %q, want %q", h.awaitRenames(1)[0].Label, want)
 	}
 }

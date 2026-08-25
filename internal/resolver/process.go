@@ -21,13 +21,27 @@ var shellNames = map[string]struct{}{
 	"tcsh": {}, "csh": {}, "login": {},
 }
 
-// processKind names what a pane is running, or "" when that cannot be said.
+// paneKind names what a pane is running, or "" when that cannot be said.
 //
-// Herdr reports a pane's foreground process together with its descendants, and
-// only a lone process names a pane. A build tool reports as `esbuild` and five
-// `node`s, an agent as half a dozen helpers; picking one of those would be
-// guesswork, and the terminal title already says what such a pane is doing.
-func processKind(pane *state.PaneState) string {
+// An agent is asked for first, because Herdr recognizes it directly and its
+// process list does not: a coding agent shows up as half a dozen helpers with
+// its own name nowhere among them.
+//
+// Failing that, Herdr reports a pane's foreground process together with its
+// descendants, and only a lone process names a pane. A build tool reports as
+// `esbuild` and five `node`s; picking one of those would be guesswork, and the
+// terminal title already says what such a pane is doing.
+func paneKind(pane *state.PaneState) string {
+	if pane == nil {
+		return ""
+	}
+	if pane.HasAgent() {
+		// An agent's name is in the generic table, because an agent naming
+		// itself is not a report of its work. As a kind it is exactly right:
+		// it names the program, which is all a kind ever does.
+		return Sanitize(pane.Agent, 0)
+	}
+
 	var kind string
 	for _, process := range pane.Processes {
 		name := strings.TrimSpace(process.Name)
@@ -57,6 +71,20 @@ func processKind(pane *state.PaneState) string {
 		return ""
 	}
 	return Sanitize(kind, 0)
+}
+
+// qualify binds a kind to what a source found, so a title reads
+// `nvim:auth.provider.ts`. A kind with nothing left to add stands alone, and
+// without a kind the activity is unchanged.
+func qualify(activity, kind string) string {
+	if kind == "" {
+		return activity
+	}
+	detail := stripKind(activity, kind)
+	if detail == "" {
+		return kind
+	}
+	return kind + KindSeparator + detail
 }
 
 // stripKind removes the kind from a detail that already carries it, so a kind
@@ -96,7 +124,7 @@ func (Process) Resolve(pane *state.PaneState) (Parts, bool) {
 	if pane == nil {
 		return Parts{}, false
 	}
-	kind := processKind(pane)
+	kind := paneKind(pane)
 	if kind == "" {
 		return Parts{}, false
 	}

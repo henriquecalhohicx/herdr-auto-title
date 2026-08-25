@@ -79,8 +79,8 @@ func TestOnlyALoneProcessNamesAPane(t *testing.T) {
 		{nil, ""},
 	}
 	for _, c := range cases {
-		if got := processKind(&state.PaneState{Processes: running(c.names...)}); got != c.want {
-			t.Errorf("processKind(%v) = %q, want %q", c.names, got, c.want)
+		if got := paneKind(&state.PaneState{Processes: running(c.names...)}); got != c.want {
+			t.Errorf("paneKind(%v) = %q, want %q", c.names, got, c.want)
 		}
 	}
 }
@@ -93,8 +93,8 @@ func TestARemoteSessionIsNotNamedTwice(t *testing.T) {
 		Processes: []state.Process{{Name: "ssh", Args: []string{"ssh", "prod-01"}}},
 	}
 
-	if got := processKind(pane); got != "" {
-		t.Errorf("processKind = %q, want empty", got)
+	if got := paneKind(pane); got != "" {
+		t.Errorf("paneKind = %q, want empty", got)
 	}
 	if got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane)); got.Name != "ssh:prod-01" {
 		t.Errorf("name = %q, want ssh:prod-01", got.Name)
@@ -136,5 +136,48 @@ func TestAProjectNeverTakesAColon(t *testing.T) {
 func TestProcessSourceOnANilPane(t *testing.T) {
 	if _, ok := (Process{}).Resolve(nil); ok {
 		t.Fatal("resolved a nil pane")
+	}
+}
+
+func TestAnAgentIsItsOwnKind(t *testing.T) {
+	// Herdr recognizes the agent directly. Its process list does not: a coding
+	// agent shows up as a caffeinate, several nodes and an MCP helper, with its
+	// own name nowhere among them.
+	pane := &state.PaneState{
+		CWD:           "/Users/dev/work/dashboard",
+		TerminalTitle: "Git email configuration",
+		Agent:         "claude",
+		Processes:     running("caffeinate", "node", "node", "fff-mcp"),
+	}
+
+	if got := paneKind(pane); got != "claude" {
+		t.Errorf("paneKind = %q, want claude", got)
+	}
+	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
+	if want := "dashboard · claude:Git email configuration"; got.Name != want {
+		t.Errorf("name = %q, want %q", got.Name, want)
+	}
+}
+
+func TestAStartingAgentIsNamedByItsKindAlone(t *testing.T) {
+	// Claude Code titles its window after itself until the conversation has a
+	// subject. That is generic as an activity, and exactly right as a kind.
+	pane := &state.PaneState{
+		CWD:           "/Users/dev/work/dashboard",
+		TerminalTitle: "Claude Code",
+		Agent:         "claude",
+	}
+
+	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
+	if want := "dashboard · claude"; got.Name != want {
+		t.Errorf("name = %q, want %q", got.Name, want)
+	}
+}
+
+func TestAPaneWithoutAnAgentIsNotNamedAfterOne(t *testing.T) {
+	pane := &state.PaneState{CWD: "/Users/dev/work/dashboard", TerminalTitle: "Claude Code"}
+
+	if got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane)); got.Name != "dashboard" {
+		t.Errorf("name = %q, want dashboard", got.Name)
 	}
 }

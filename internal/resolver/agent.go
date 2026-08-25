@@ -40,5 +40,5 @@ func (Agent) Resolve(pane *state.PaneState) (Parts, bool) {
 	if strings.EqualFold(activity, pane.Agent) || strings.EqualFold(activity, pane.DisplayAgent) {
 		return Parts{}, false
 	}
-	return Parts{Activity: activity, Confidence: ConfidenceAgent}, true
+	return Parts{Activity: qualify(activity, paneKind(pane)), Confidence: ConfidenceAgent}, true
 }

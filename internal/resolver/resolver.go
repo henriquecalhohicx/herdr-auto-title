@@ -22,7 +22,6 @@ const GenericFallback = "Shell"
 // source already supplied.
 const (
 	ConfidenceFallback      = 10
-	ConfidenceAgentName     = 20
 	ConfidenceCWD           = 30
 	ConfidenceGit           = 40
 	ConfidenceSSH           = 60
@@ -89,7 +88,6 @@ func Default(maxLength, branchMax int) *Deterministic {
 		SSH{},
 		NewGit(branchMax),
 		NewCWD(),
-		AgentName{},
 	)
 }
 

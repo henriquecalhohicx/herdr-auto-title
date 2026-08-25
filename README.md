@@ -106,8 +106,7 @@ one.
 | 5 | SSH session | **implemented** |
 | 6 | Git context | **implemented** |
 | 7 | Working directory | **implemented** |
-| 8 | Agent name | **implemented** |
-| 9 | Generic fallback (`Shell`) | **implemented** |
+| 8 | Generic fallback (`Shell`) | **implemented** |
 
 A value is cleaned before it becomes part of a title, and a source declines when
 nothing useful survives. Cleaning removes locations — absolute paths,
@@ -139,11 +138,13 @@ from what: `self-care-portal · yarn dev`. A colon binds a kind of thing to the
 particular one: `nvim:auth.provider.ts`. A project name never takes a colon,
 because a project is a place rather than a kind.
 
-The kind comes from the process table, not from the shape of a title, and only
-when a pane runs a single program: an editor reports as `nvim`, while a build
-tool reports as `esbuild` and five `node`s and an agent as half a dozen helpers.
-Picking one of those would be guesswork, and such a pane already has a terminal
-title saying what it is doing. A kind that has nothing to add stands alone —
+An agent is asked for first, because Herdr recognizes it directly and its
+process list does not — a coding agent shows up as a `caffeinate`, several
+`node`s and an MCP helper, with its own name nowhere among them. Otherwise the
+kind comes from the process table, and only when a pane runs a single program:
+an editor reports as `nvim`, while a build tool reports as `esbuild` and five
+`node`s. Picking one of those would be guesswork, and such a pane already has a
+terminal title saying what it is doing. A kind that has nothing to add stands alone —
 `dashboard · nvim` for an editor with no file open — and a title that already
 carries its program's name loses it, since `nvim:auth.provider.ts - Nvim` says
 the same thing twice.
@@ -198,15 +199,10 @@ bare directory name. git is executed directly with arguments, never through a
 shell, and no repository, a detached HEAD, a missing git and a timed-out lookup
 are all simply "no branch".
 
-An agent has no topic to report the moment it starts, and Claude Code titles its
-window `Claude Code` until the conversation has a subject. That name is generic
-everywhere else, but on a pane that genuinely runs the agent it is the one thing
-worth saying, so the bottom rung of the chain says it: a tab with an idle agent
-reads `dashboard · Claude Code` while a plain shell in the same directory reads
-`dashboard`. It fills only an activity nothing else claimed, and the sources
-above take over the moment the agent has something to report. The name comes from
-Herdr's `display_agent` when there is one, from the terminal title when the agent
-titled its window after itself, and from the matched identifier otherwise.
+An agent that has not decided on a topic yet titles its window after itself, so
+`Claude Code` is generic as an activity and exactly right as a kind: the tab
+reads `dashboard · claude` until there is something to report, then
+`dashboard · claude:Implement OAuth scopes`.
 
 Every value that reaches a title — a directory name, a terminal title, an agent
 title — is stripped of ANSI escapes and control characters, whitespace

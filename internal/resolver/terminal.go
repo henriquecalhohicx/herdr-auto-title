@@ -37,15 +37,8 @@ func (TerminalTitle) Resolve(pane *state.PaneState) (Parts, bool) {
 		return Parts{}, false
 	}
 
-	kind := processKind(pane)
-	if kind == "" {
-		return Parts{Activity: activity, Confidence: ConfidenceTerminalTitle}, true
-	}
-
-	detail := stripKind(activity, kind)
-	if detail == "" {
-		// The title said nothing the kind does not already say.
-		return Parts{Activity: kind, Confidence: ConfidenceTerminalTitle}, true
-	}
-	return Parts{Activity: kind + KindSeparator + detail, Confidence: ConfidenceTerminalTitle}, true
+	return Parts{
+		Activity:   qualify(activity, paneKind(pane)),
+		Confidence: ConfidenceTerminalTitle,
+	}, true
 }

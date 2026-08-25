@@ -17,7 +17,7 @@ func TestAgentTitleBeatsEverySourceBelowIt(t *testing.T) {
 		AgentTitle:    "Implement OAuth scopes",
 	}))
 
-	if want := "dashboard · Implement OAuth scopes"; got.Name != want {
+	if want := "dashboard · claude:Implement OAuth scopes"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 	if got.Reason != "agent" {
@@ -37,7 +37,7 @@ func TestAgentTitleOutranksAMeaningfulTerminalTitle(t *testing.T) {
 		AgentTitle:    "Implement OAuth scopes",
 	}))
 
-	if want := "dashboard · Implement OAuth scopes"; got.Name != want {
+	if want := "dashboard · claude:Implement OAuth scopes"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 }
@@ -55,7 +55,7 @@ func TestGenericAgentNameFallsThrough(t *testing.T) {
 				AgentTitle:    title,
 			}))
 
-			if want := "dashboard · Fix OAuth redirect"; got.Name != want {
+			if want := "dashboard · claude:Fix OAuth redirect"; got.Name != want {
 				t.Errorf("name = %q, want %q", got.Name, want)
 			}
 			if got.Reason != "terminal_title" {
@@ -68,7 +68,7 @@ func TestGenericAgentNameFallsThrough(t *testing.T) {
 func TestAgentEchoingItsOwnNameIsNotAgentContext(t *testing.T) {
 	// Agents the generic table has never heard of must not pass their own name
 	// off as a report of their work. The name still reaches the tab, but as the
-	// weakest source rather than the strongest.
+	// kind of program running there rather than as what it is doing.
 	pane := &state.PaneState{
 		CWD:          "/Users/dev/work/dashboard",
 		Agent:        "acme-bot",
@@ -82,11 +82,11 @@ func TestAgentEchoingItsOwnNameIsNotAgentContext(t *testing.T) {
 	}
 
 	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
-	if want := "dashboard · Acme Bot"; got.Name != want {
+	if want := "dashboard · acme-bot"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
-	if got.Reason != "agent_name" {
-		t.Errorf("reason = %q, want agent_name", got.Reason)
+	if got.Reason != "process" {
+		t.Errorf("reason = %q, want process", got.Reason)
 	}
 }
 
@@ -116,7 +116,7 @@ func TestAgentTitleWithNoDirectoryStandsAlone(t *testing.T) {
 		AgentTitle:  "Implement OAuth scopes",
 	}))
 
-	if want := "Implement OAuth scopes"; got.Name != want {
+	if want := "claude:Implement OAuth scopes"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 }
@@ -143,7 +143,7 @@ func TestContextAndActivityComeFromTheSamePane(t *testing.T) {
 	}
 
 	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tab)
-	if want := "dashboard · Implement OAuth scopes"; got.Name != want {
+	if want := "dashboard · claude:Implement OAuth scopes"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 }
