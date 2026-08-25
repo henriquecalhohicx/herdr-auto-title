@@ -79,9 +79,10 @@ func TestABranchIsReducedToWhatIdentifiesIt(t *testing.T) {
 		"test/process-read-flake":      "process-read",
 		"feature/add-dark-mode":        "add-dark",
 
-		// A name that fits keeps its namespace: `feat/` is what tells it from
-		// `fix/`, and there is room for both halves.
+		// A name that fits is left whole, key or no key: `feat/` is what tells
+		// it from `fix/`, and a key that already fits needs no rescuing.
 		"feat/oauth": "feat/oauth",
+		"feat/ab-12": "feat/ab-12",
 		"short":      "short",
 	}
 

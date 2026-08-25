@@ -82,14 +82,14 @@ func shortenBranch(branch string, maxLength int) string {
 		return ""
 	}
 
+	if _, over := splitAtWidth(branch, maxLength); over == "" {
+		return branch
+	}
+
 	// A key is atomic: cutting it leaves something that identifies nothing, so
 	// it is the one value allowed past maxLength.
 	if key := trackerKey.FindString(branch); key != "" {
 		return strings.ToUpper(key)
-	}
-
-	if _, over := splitAtWidth(branch, maxLength); over == "" {
-		return branch
 	}
 
 	if cut := strings.LastIndex(branch, "/"); cut >= 0 && cut+1 < len(branch) {
