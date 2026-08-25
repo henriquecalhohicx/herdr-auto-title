@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kryptamine/herdr-auto-title/internal/git"
 	"github.com/kryptamine/herdr-auto-title/internal/herdr"
 	"github.com/kryptamine/herdr-auto-title/internal/resolver"
 )
@@ -16,7 +17,11 @@ import (
 const testPoll = 10 * time.Millisecond
 
 func testConfig() Config {
-	return Config{Poll: testPoll, MaxLength: resolver.DefaultMaxLength}
+	return Config{
+		Poll:      testPoll,
+		MaxLength: resolver.DefaultMaxLength,
+		BranchMax: resolver.DefaultBranchMaxLength,
+	}
 }
 
 func discardLogger() *slog.Logger {
@@ -651,5 +656,19 @@ func TestCheckingOutABranchRetitlesTheTab(t *testing.T) {
 	renames := h.awaitRenames(2)
 	if want := filepath.Base(repo) + " › feat/oauth"; renames[1].Label != want {
 		t.Errorf("rename = %q, want %q", renames[1].Label, want)
+	}
+}
+
+func TestBranchesSwitchedOffAreNotRead(t *testing.T) {
+	// Zero is how a user turns branches off, and a read whose answer is
+	// discarded still costs a walk up the tree on every pane, every poll.
+	repo := repoAt(t, "feat/oauth", "main")
+
+	cfg := testConfig()
+	cfg.BranchMax = 0
+	app := New(cfg, discardLogger(), testResolver(t))
+
+	if checkout := app.checkoutIn(herdr.PaneInfo{PaneID: "wE:p1", CWD: repo}); checkout != (git.Checkout{}) {
+		t.Errorf("checkout = %+v, want nothing read", checkout)
 	}
 }

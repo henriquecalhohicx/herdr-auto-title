@@ -205,7 +205,13 @@ func (a *App) processesIn(ctx context.Context, client herdr.Client, paneID strin
 // checkoutIn reports what the repository holding the pane has checked out.
 // Unlike a process read it is not cached, and why not is in
 // docs/architecture/title-resolution.md.
-func checkoutIn(pane herdr.PaneInfo) git.Checkout {
+func (a *App) checkoutIn(pane herdr.PaneInfo) git.Checkout {
+	// A branch width of zero is how branches are turned off, and a read whose
+	// answer is thrown away is still a read on every pane twice a second.
+	if a.cfg.BranchMax <= 0 {
+		return git.Checkout{}
+	}
+
 	// The shell's own directory, for the same reason the CWD source prefers it:
 	// it names the project more stably than whatever is running right now.
 	dir := pane.CWD
@@ -229,7 +235,7 @@ func (a *App) tabsIn(ctx context.Context, client herdr.Client, snapshot herdr.Sn
 	for _, pane := range snapshot.Panes {
 		byTab[pane.TabID] = append(byTab[pane.TabID],
 			state.PaneFrom(pane, a.processesIn(ctx, client, pane.PaneID),
-				checkoutIn(pane), a.changes.ChangedAt(pane.PaneID)))
+				a.checkoutIn(pane), a.changes.ChangedAt(pane.PaneID)))
 	}
 
 	// An unnamed tab carries its place in the workspace, and the snapshot lists
