@@ -1,9 +1,36 @@
+<h1 align="center">
+  <img
+  src="assets/banner.png"
+  alt="Herdr Auto Title: smarter tab titles, zero effort"
+  width="800"
+  />
+</h1>
+
 <div align="center">
-
-# Herdr Auto Title
-
-**Tabs that say what you are doing.**
-
+  <a href="https://github.com/kryptamine/herdr-auto-title/actions/workflows/ci.yml">
+    <img
+    src="https://img.shields.io/github/actions/workflow/status/kryptamine/herdr-auto-title/ci.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI"
+    alt="CI Badge"
+    />
+  </a>
+  <a href="https://github.com/kryptamine/herdr-auto-title/releases">
+    <img
+    src="https://img.shields.io/github/v/release/kryptamine/herdr-auto-title?style=for-the-badge&logo=github&color=0797ff&labelColor=000000"
+    alt="Release Badge"
+    />
+  </a>
+  <a href="https://go.dev">
+    <img
+    src="https://img.shields.io/github/go-mod/go-version/kryptamine/herdr-auto-title?style=for-the-badge&logo=go&logoColor=white&labelColor=000000"
+    alt="Go Version Badge"
+    />
+  </a>
+  <a href="LICENSE">
+    <img
+    src="https://img.shields.io/badge/license-MIT-0797ff?style=for-the-badge&labelColor=000000"
+    alt="License Badge"
+    />
+  </a>
 </div>
 
 A [Herdr](https://herdr.dev) plugin that reads your session twice a second and
@@ -12,13 +39,13 @@ it leaves that tab alone from then on.
 
 ## Demo
 
-<!-- Drag the video into a GitHub issue or PR comment, then paste the
-     https://github.com/user-attachments/assets/... URL it gives you here. -->
+https://github.com/user-attachments/assets/94d9f4f3-b986-4664-a9bc-d078ece4f05e
 
 ## Quick start
 
-Requires Herdr 0.8.2+ and Go 1.24+ — the plugin is compiled from source on your
-machine when Herdr installs it.
+> [!IMPORTANT]
+> Requires Herdr 0.8.2+ and Go 1.24+ on macOS or Linux. Herdr compiles the
+> plugin from source on your machine when it installs it.
 
 ```sh
 herdr plugin install kryptamine/herdr-auto-title
@@ -38,60 +65,27 @@ $HOME                                  →  Shell
 ```
 
 Titles read `<context> › <activity>`, capped at 64 columns of the tab bar. The
-activity is the first thing that has something to say — what an agent reports it
-is working on, then the terminal title, then a lone program in the pane. The
+activity is the first of these that has something to say: what an agent reports
+it is working on, then the terminal title, then a lone program in the pane. The
 context is the directory you are in, or the machine you reached over `ssh`.
 
 Four rules explain most surprises:
 
-- Your workspace name is not repeated — Herdr already shows it above the tabs.
-- Paths, shell prompts and bare program names are dropped; they say where you
-  are, which the context has said already.
-- A tab with several panes is named after one: the focused one, the one running
-  a busy agent, or the one that changed last.
+- Auto Title never repeats your workspace name, because Herdr already shows it
+  above the tabs.
+- It drops paths, shell prompts and bare program names, which only say again
+  where you are.
+- A tab with several panes takes its name from one of them: the focused pane, a
+  pane running a busy agent, or the pane that changed last.
 - **A tab you renamed is yours.** Auto Title never touches it again.
 
-## Configuration
-
-No configuration file. Four environment variables, and an unusable value is a
-warning rather than a failure to start.
-
-| Variable | Default | Meaning |
-|----------|---------|---------|
-| `HERDR_AUTO_TITLE_DEBUG` | `false` | Log at DEBUG instead of INFO |
-| `HERDR_AUTO_TITLE_POLL_MS` | `500` | How often the session is read; also the fastest a tab can be renamed |
-| `HERDR_AUTO_TITLE_MAX_LENGTH` | `64` | Title width in tab-bar columns; CJK and emoji take two each |
-| `HERDR_AUTO_TITLE_MANUAL_FILE` | `<config>/herdr-auto-title/manual-names.json` | Where tabs you renamed by hand are remembered |
-
-## Privacy
-
-Auto Title makes no network request and runs no subprocess. It reads the Herdr
-socket, and the only thing it ever writes back is a tab label.
-
-There is no LLM, no telemetry and no transcript reading. Every value that
-reaches a title is stripped of escapes and control characters first, and nothing
-derived from terminal output is passed to a shell — renames go over the socket
-API. Raw terminal output is never logged.
-
-## Troubleshooting
-
-- **Nothing is renamed.** That is the normal state once every tab is right; the
-  loop logs only when it acts. Run with `HERDR_AUTO_TITLE_DEBUG=1` to watch it.
-- **A tab renames whenever I switch files.** It follows your editor's title.
-  Raise `HERDR_AUTO_TITLE_POLL_MS` to slow it down.
-- **A tab keeps the name I gave it.** By design. To hand it back: stop the
-  plugin, remove that tab's entry from `manual-names.json`, start it again.
-  Editing the file while it runs does nothing — the locks are held in memory.
-- **A tab I renamed lost its name.** A rename made while the plugin was not
-  running is not remembered; Herdr reuses tab ids between sessions, and a lock
-  is only trusted while the tab still carries the name it was locked with.
-- **It exits with "HERDR_SOCKET_PATH is not set".** It has to be started by
-  Herdr, or from inside a Herdr pane.
+> [!WARNING]
+> Renaming it again does not hand it back. To get automatic naming for that tab,
+> stop the plugin, delete its entry from `manual-names.json` (or delete the
+> whole file), and start the plugin again.
 
 ## Documentation
 
 - [Architecture](docs/architecture/) — how it works and why: the poll loop, how
   a tab becomes a name, and the measured facts about the Herdr socket API.
 - [Development](docs/development.md) — working on it.
-
-MIT — see [LICENSE](LICENSE).
