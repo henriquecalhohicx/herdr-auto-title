@@ -14,7 +14,7 @@ Bun or Python runtime, no database, no external service, and no LLM.
 
 ```
 ~/work/dashboard                            →  dashboard
-~/work/dashboard, title "Fix OAuth redirect"→  dashboard · Fix OAuth redirect
+~/work/dashboard, title "Fix OAuth redirect"→  dashboard › Fix OAuth redirect
 $HOME                                       →  Shell
 ```
 
@@ -92,7 +92,7 @@ There is no scrollback scanning and no LLM.
 
 ### Title sources
 
-Titles are formatted as `<context> · <activity>`, capped at 64 characters. Each
+Titles are formatted as `<context> › <activity>`, capped at 64 characters. Each
 field is filled by the highest-priority source that supplies it, so a
 lower-priority source can complete a title without overriding a higher-priority
 one.
@@ -133,12 +133,10 @@ working on through the terminal title instead. The agent source is what reads th
 field when an agent does set it; in practice most agent context arrives one rung
 lower, through the terminal title.
 
-Two separators, and they mean different things. A middle dot separates where
-from what: `self-care-portal · yarn dev`. An angle binds a kind of thing to the
-particular one, reading as nesting: `nvim › auth.provider.ts`. A project never
-takes an angle, because a project is a place rather than a kind. The two are
-deliberately different weights, so a title carrying both stays legible:
-`self-care-portal · nvim › auth.provider.ts`.
+A title reads as a path from the general to the particular, one separator
+throughout: `self-care-portal › nvim › auth.provider.ts`. Where a part came from
+— a directory, a program, a file — is not something a separator can convey, and
+a second one would only ask the reader to learn a distinction they cannot see.
 
 An agent is asked for first, because Herdr recognizes it directly and its
 process list does not — a coding agent shows up as a `caffeinate`, several
@@ -147,13 +145,13 @@ kind comes from the process table, and only when a pane runs a single program:
 an editor reports as `nvim`, while a build tool reports as `esbuild` and five
 `node`s. Picking one of those would be guesswork, and such a pane already has a
 terminal title saying what it is doing. A kind that has nothing to add stands alone —
-`dashboard · nvim` for an editor with no file open — and a title that already
+`dashboard › nvim` for an editor with no file open — and a title that already
 carries its program's name loses it, since `nvim › auth.provider.ts - Nvim` says
 the same thing twice.
 
 A pane running `ssh` is named after the machine it reached, not the directory it
 was launched from: `ssh › prod-01`, and
-`ssh › prod-01 · Restart the queue workers` once the remote shell has something
+`ssh › prod-01 › Restart the queue workers` once the remote shell has something
 to report.
 
 The `ssh ›` mark goes on the host rather than into the activity slot, because the
@@ -166,10 +164,10 @@ The user is dropped: `root@prod-01` and `deploy@prod-01` are the same machine,
 and a tab bar has no room to say who is logged in. Options are parsed rather than
 guessed at, so `ssh -p 2222 prod-01` and `ssh prod-01 tail -f /var/log/syslog`
 both yield `prod-01`. A destination that cannot be read still marks the tab
-remote, as `dashboard · SSH`.
+remote, as `dashboard › SSH`.
 
 Inside a repository the branch becomes the activity, so a tab reads
-`dashboard · MC-13200`. Branch names are far too long to use whole — the ones
+`dashboard › MC-13200`. Branch names are far too long to use whole — the ones
 this was calibrated against averaged fifty characters — and branch conventions
 vary too much to enumerate, so two rules reduce any of them:
 
@@ -204,13 +202,13 @@ are all simply "no branch".
 
 An agent that has not decided on a topic yet titles its window after itself, so
 `Claude Code` is generic as an activity and exactly right as a kind: the tab
-reads `dashboard · claude` until there is something to report, then
-`dashboard · claude › Implement OAuth scopes`.
+reads `dashboard › claude` until there is something to report, then
+`dashboard › claude › Implement OAuth scopes`.
 
 Herdr shows the workspace above its tabs, so a tab in the workspace it is named
 after spends half its width repeating what is already on screen. That half is
 dropped: in a workspace called `dashboard`, a tab reads `nvim › auth.ts` rather
-than `dashboard · nvim › auth.ts`. It is dropped only when something else remains
+than `dashboard › nvim › auth.ts`. It is dropped only when something else remains
 — a tab reduced to nothing has lost more than it saved — and only on an exact
 match, so a tab whose directory has left its workspace behind is exactly the one
 that keeps saying where it is.

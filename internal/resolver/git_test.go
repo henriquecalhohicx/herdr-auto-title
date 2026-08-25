@@ -421,7 +421,7 @@ func TestTheShippedChainPutsTheBranchAfterTheDirectory(t *testing.T) {
 
 	chain := Default(DefaultMaxLength, DefaultBranchMaxLength)
 	tab := tabWithPane(&state.PaneState{CWD: repo})
-	want := filepath.Base(repo) + " · MC-13200"
+	want := filepath.Base(repo) + " › MC-13200"
 
 	deadline := time.Now().Add(2 * time.Second)
 	for {
@@ -450,7 +450,7 @@ func TestAMeaningfulTerminalTitleOutranksTheBranch(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	got := chain.Resolve(context.Background(), tab)
 
-	if want := filepath.Base(repo) + " · Fix OAuth redirect"; got.Name != want {
+	if want := filepath.Base(repo) + " › Fix OAuth redirect"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 }

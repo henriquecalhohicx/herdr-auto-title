@@ -123,8 +123,8 @@ func TestHigherPrioritySourceSuppliesActivity(t *testing.T) {
 	)
 
 	got := r.Resolve(context.Background(), tabWithCWD("/Users/dev/work/dashboard"))
-	if got.Name != "dashboard · Tests" {
-		t.Errorf("name = %q, want %q", got.Name, "dashboard · Tests")
+	if got.Name != "dashboard › Tests" {
+		t.Errorf("name = %q, want %q", got.Name, "dashboard › Tests")
 	}
 	if got.Reason != "test_source" || got.Confidence != ConfidenceProcess {
 		t.Errorf("reason/confidence = %q/%d, want test_source/%d", got.Reason, got.Confidence, ConfidenceProcess)
@@ -138,8 +138,8 @@ func TestHigherPrioritySourceOverridesContext(t *testing.T) {
 	)
 
 	got := r.Resolve(context.Background(), tabWithCWD("/Users/dev/work/dashboard"))
-	if got.Name != "prod-01 · SSH" {
-		t.Errorf("name = %q, want %q", got.Name, "prod-01 · SSH")
+	if got.Name != "prod-01 › SSH" {
+		t.Errorf("name = %q, want %q", got.Name, "prod-01 › SSH")
 	}
 }
 
@@ -192,7 +192,7 @@ func TestADifferentWorkspaceIsNotDropped(t *testing.T) {
 	tab.WorkspaceName = "api"
 
 	got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(context.Background(), tab)
-	if want := "dashboard · Fix OAuth redirect"; got.Name != want {
+	if want := "dashboard › Fix OAuth redirect"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 }
@@ -205,7 +205,7 @@ func TestAWorkspaceWithoutAName(t *testing.T) {
 	})
 
 	got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(context.Background(), tab)
-	if want := "dashboard · Fix OAuth redirect"; got.Name != want {
+	if want := "dashboard › Fix OAuth redirect"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 }

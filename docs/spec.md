@@ -444,7 +444,7 @@ Example:
 
 ```text
 automatic:
-dashboard · Tests
+dashboard › Tests
 
 user:
 My Important Work
@@ -639,10 +639,10 @@ Examples:
 
 ```text
 ssh root@prod-01
-→ prod-01 · SSH
+→ prod-01 › SSH
 
 ssh dev@production.example.com
-→ production.example.com · SSH
+→ production.example.com › SSH
 ```
 
 Prefer hostname over username.
@@ -656,8 +656,8 @@ When CWD is inside a Git repository, Git information may be used as a fallback o
 Potential output:
 
 ```text
-dashboard · MCP
-dashboard · MC-13200
+dashboard › MCP
+dashboard › MC-13200
 ```
 
 Avoid excessively long branch names.
@@ -694,30 +694,30 @@ Use a safe generic fallback.
 Preferred format:
 
 ```text
-<context> · <activity>
+<context> › <activity>
 ```
 
 Examples:
 
 ```text
-dashboard · Dev
-dashboard · Tests
-dashboard · OAuth scopes
-api · Tests
-infra · K8s Logs
-prod-01 · SSH
+dashboard › Dev
+dashboard › Tests
+dashboard › OAuth scopes
+api › Tests
+infra › K8s Logs
+prod-01 › SSH
 ```
 
 Avoid exposing full commands:
 
 ```text
-dashboard · pnpm test -- --watch --coverage
+dashboard › pnpm test -- --watch --coverage
 ```
 
 Instead:
 
 ```text
-dashboard · Tests
+dashboard › Tests
 ```
 
 Maximum title length:
@@ -896,7 +896,7 @@ Example:
 INFO tab renamed
     tab_id=...
     old="dashboard"
-    new="dashboard · Tests"
+    new="dashboard › Tests"
     reason="known_command"
 
 DEBUG poll completed
@@ -1044,11 +1044,11 @@ dashboard
 
 process changes to pnpm test
 ↓
-dashboard · Tests
+dashboard › Tests
 
 agent title changes
 ↓
-dashboard · OAuth scopes
+dashboard › OAuth scopes
 ```
 
 ---
@@ -1123,7 +1123,7 @@ process: zsh
 cwd: ~/work/dashboard
 process: pnpm test
 
-→ dashboard · Tests
+→ dashboard › Tests
 ```
 
 ### Development server
@@ -1132,7 +1132,7 @@ process: pnpm test
 cwd: ~/work/dashboard
 process: pnpm dev
 
-→ dashboard · Dev
+→ dashboard › Dev
 ```
 
 ### Claude Code
@@ -1142,7 +1142,7 @@ cwd: ~/work/dashboard
 agent: Claude Code
 terminal title: Implement OAuth scopes
 
-→ dashboard · OAuth scopes
+→ dashboard › OAuth scopes
 ```
 
 ### SSH
@@ -1150,7 +1150,7 @@ terminal title: Implement OAuth scopes
 ```text
 ssh root@prod-01
 
-→ prod-01 · SSH
+→ prod-01 › SSH
 ```
 
 ### Kubernetes
@@ -1158,14 +1158,14 @@ ssh root@prod-01
 ```text
 kubectl logs deployment/api
 
-→ infra · K8s Logs
+→ infra › K8s Logs
 ```
 
 ### Manual rename
 
 ```text
 automatic:
-dashboard · Tests
+dashboard › Tests
 
 user:
 Important work

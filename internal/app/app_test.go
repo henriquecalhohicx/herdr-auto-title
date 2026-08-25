@@ -117,7 +117,7 @@ func TestATabAppearingLaterIsNamed(t *testing.T) {
 	})
 
 	renames := h.awaitRenames(1)
-	if want := "dashboard · Fix OAuth redirect"; renames[0].Label != want {
+	if want := "dashboard › Fix OAuth redirect"; renames[0].Label != want {
 		t.Errorf("rename = %q, want %q", renames[0].Label, want)
 	}
 }
@@ -300,7 +300,7 @@ func TestAgentContextNamesTheTab(t *testing.T) {
 		}},
 	)
 
-	if want := "dashboard · claude › Implement OAuth scopes"; h.awaitRenames(1)[0].Label != want {
+	if want := "dashboard › claude › Implement OAuth scopes"; h.awaitRenames(1)[0].Label != want {
 		t.Errorf("rename = %q, want %q", h.awaitRenames(1)[0].Label, want)
 	}
 }

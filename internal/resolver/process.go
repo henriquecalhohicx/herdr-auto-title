@@ -6,19 +6,6 @@ import (
 	"herdr-auto-title/internal/state"
 )
 
-// KindSeparator binds a kind to its detail: `nvim › auth.provider.ts`.
-//
-// It is not the separator between the two halves of a title. The angle reads as
-// nesting — this kind of thing, that one in particular — while the middle dot
-// separates where from what. A project never takes an angle, because a project
-// is a place rather than a kind of thing.
-//
-// The two are deliberately different weights, so a title carrying both stays
-// legible: `self-care-portal · nvim › auth.provider.ts`.
-const KindSeparator = " " + kindSeparatorRune + " "
-
-const kindSeparatorRune = "›"
-
 // shellNames are the programs that run in a pane without being what the pane is
 // for. A pane running a shell is described by what the shell is running.
 var shellNames = map[string]struct{}{
@@ -89,7 +76,7 @@ func qualify(activity, kind string) string {
 	if detail == "" {
 		return kind
 	}
-	return kind + KindSeparator + detail
+	return kind + Separator + detail
 }
 
 // stripKind removes the kind from a detail that already carries it, so a kind
@@ -110,7 +97,7 @@ func stripKind(detail, kind string) string {
 	case strings.HasPrefix(lower, lowerKind):
 		trimmed = trimmed[len(kind):]
 	}
-	return strings.Trim(trimmed, " -–—|:"+separatorRune+kindSeparatorRune)
+	return strings.Trim(trimmed, " -–—|:"+separatorRune)
 }
 
 // Process names a pane after the program running in it when nothing has said

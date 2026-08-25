@@ -89,7 +89,7 @@ func TestAnUnreadableDestinationStillMarksTheTabRemote(t *testing.T) {
 		pane := sshPane("/Users/dev/work/dashboard", argv...)
 
 		got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
-		if want := "dashboard · SSH"; got.Name != want {
+		if want := "dashboard › SSH"; got.Name != want {
 			t.Errorf("argv %v → %q, want %q", argv, got.Name, want)
 		}
 	}
@@ -135,7 +135,7 @@ func TestTheMarkSurvivesARemoteTitle(t *testing.T) {
 	pane.TerminalTitle = "Restart the queue workers"
 
 	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
-	if want := "ssh › prod-01 · Restart the queue workers"; got.Name != want {
+	if want := "ssh › prod-01 › Restart the queue workers"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 }

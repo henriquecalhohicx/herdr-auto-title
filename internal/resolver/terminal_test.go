@@ -30,8 +30,8 @@ func TestTerminalTitleBeatsTheWorkingDirectory(t *testing.T) {
 		TerminalTitle: "Fix OAuth redirect",
 	}))
 
-	if got.Name != "dashboard · Fix OAuth redirect" {
-		t.Errorf("name = %q, want %q", got.Name, "dashboard · Fix OAuth redirect")
+	if got.Name != "dashboard › Fix OAuth redirect" {
+		t.Errorf("name = %q, want %q", got.Name, "dashboard › Fix OAuth redirect")
 	}
 	if got.Reason != "terminal_title" {
 		t.Errorf("reason = %q, want terminal_title", got.Reason)
@@ -67,8 +67,8 @@ func TestTerminalTitleFallsBackToTheRawField(t *testing.T) {
 	}))
 
 	// The raw field carries escapes Herdr would normally have stripped.
-	if got.Name != "dashboard · ✳ Fix OAuth redirect" {
-		t.Errorf("name = %q, want %q", got.Name, "dashboard · ✳ Fix OAuth redirect")
+	if got.Name != "dashboard › ✳ Fix OAuth redirect" {
+		t.Errorf("name = %q, want %q", got.Name, "dashboard › ✳ Fix OAuth redirect")
 	}
 }
 
@@ -79,8 +79,8 @@ func TestStrippedTerminalTitleWinsOverTheRawOne(t *testing.T) {
 		TerminalTitleRaw: "◐ Fix OAuth redirect",
 	}))
 
-	if got.Name != "dashboard · Fix OAuth redirect" {
-		t.Errorf("name = %q, want %q", got.Name, "dashboard · Fix OAuth redirect")
+	if got.Name != "dashboard › Fix OAuth redirect" {
+		t.Errorf("name = %q, want %q", got.Name, "dashboard › Fix OAuth redirect")
 	}
 }
 
@@ -90,8 +90,8 @@ func TestTerminalTitleIsSanitized(t *testing.T) {
 		TerminalTitle: "\x1b[31mFix OAuth\nredirect\x1b[0m\t",
 	}))
 
-	if got.Name != "dashboard · Fix OAuth redirect" {
-		t.Errorf("name = %q, want %q", got.Name, "dashboard · Fix OAuth redirect")
+	if got.Name != "dashboard › Fix OAuth redirect" {
+		t.Errorf("name = %q, want %q", got.Name, "dashboard › Fix OAuth redirect")
 	}
 }
 
@@ -104,7 +104,7 @@ func TestLongTerminalTitleIsTruncatedAsAWhole(t *testing.T) {
 	if runes := len([]rune(got.Name)); runes > DefaultMaxLength {
 		t.Errorf("name is %d runes, want at most %d: %q", runes, DefaultMaxLength, got.Name)
 	}
-	if !strings.HasPrefix(got.Name, "dashboard · long") {
+	if !strings.HasPrefix(got.Name, "dashboard › long") {
 		t.Errorf("name = %q, want it to start with the context", got.Name)
 	}
 }
@@ -149,16 +149,16 @@ func TestEditorTitleKeepsTheFileAndDropsThePath(t *testing.T) {
 	}{
 		{
 			"Makefile (~/Work/herdr-auto-title) - Nvim",
-			"herdr-auto-title · Makefile - Nvim",
+			"herdr-auto-title › Makefile - Nvim",
 		},
 		{
 			"03-terminal-title-source.md (~/Work/herdr-auto-title/docs/issues) - Nvim",
-			"herdr-auto-title · 03-terminal-title-source.md - Nvim",
+			"herdr-auto-title › 03-terminal-title-source.md - Nvim",
 		},
 		{
 			// A file browser buffer names no file, so only the editor is left.
 			"- (oil:///Users/dev/Work/herdr-auto-title) - Nvim",
-			"herdr-auto-title · Nvim",
+			"herdr-auto-title › Nvim",
 		},
 	}
 

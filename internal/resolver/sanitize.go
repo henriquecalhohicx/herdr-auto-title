@@ -6,14 +6,19 @@ import (
 	"unicode"
 )
 
-// Separator joins the context and the activity of a title.
-const Separator = " · "
+// Separator joins every part of a title, and there is only one.
+//
+// A title reads as a path from the general to the particular:
+// `self-care-portal › nvim › auth.provider.ts`. Where a part came from — a
+// directory, a program, a file — is not something a separator can convey, and a
+// second one only asks the reader to learn a distinction they cannot see.
+const Separator = " " + separatorRune + " "
 
-const separatorRune = "·"
+const separatorRune = "›"
 
 // trimmable are the characters a title must not start or end on: a separator
 // left dangling by truncation says a part was lost without saying which.
-const trimmable = " " + separatorRune + kindSeparatorRune
+const trimmable = " " + separatorRune
 
 var (
 	// ansiRe matches CSI sequences, OSC strings and single-character escapes.

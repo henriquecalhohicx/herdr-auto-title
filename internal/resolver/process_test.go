@@ -25,7 +25,7 @@ func TestTheKindQualifiesTheTitle(t *testing.T) {
 	}
 
 	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
-	if want := "dashboard · nvim › auth.provider.ts"; got.Name != want {
+	if want := "dashboard › nvim › auth.provider.ts"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 }
@@ -39,7 +39,7 @@ func TestAKindWithNothingToAddStandsAlone(t *testing.T) {
 	}
 
 	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
-	if want := "dashboard · nvim"; got.Name != want {
+	if want := "dashboard › nvim"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 }
@@ -48,7 +48,7 @@ func TestAKindWithNoTitleAtAllStillNamesThePane(t *testing.T) {
 	pane := &state.PaneState{CWD: "/Users/dev/work/dashboard", Processes: running("htop")}
 
 	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
-	if want := "dashboard · htop"; got.Name != want {
+	if want := "dashboard › htop"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 	if got.Reason != "process" {
@@ -87,7 +87,7 @@ func TestOnlyALoneProcessNamesAPane(t *testing.T) {
 
 func TestARemoteSessionIsNotNamedTwice(t *testing.T) {
 	// ssh is marked on the host, where the mark cannot be outranked. Repeating
-	// it in the activity would read `ssh › prod-01 · ssh`.
+	// it in the activity would read `ssh › prod-01 › ssh`.
 	pane := &state.PaneState{
 		CWD:       "/Users/dev/work/dashboard",
 		Processes: []state.Process{{Name: "ssh", Args: []string{"ssh", "prod-01"}}},
@@ -128,7 +128,7 @@ func TestAProjectNeverTakesAColon(t *testing.T) {
 	}
 
 	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
-	if want := "self-care-portal · yarn dev"; got.Name != want {
+	if want := "self-care-portal › yarn dev"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 }
@@ -154,7 +154,7 @@ func TestAnAgentIsItsOwnKind(t *testing.T) {
 		t.Errorf("paneKind = %q, want claude", got)
 	}
 	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
-	if want := "dashboard · claude › Git email configuration"; got.Name != want {
+	if want := "dashboard › claude › Git email configuration"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 }
@@ -169,7 +169,7 @@ func TestAStartingAgentIsNamedByItsKindAlone(t *testing.T) {
 	}
 
 	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
-	if want := "dashboard · claude"; got.Name != want {
+	if want := "dashboard › claude"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 }
