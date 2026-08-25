@@ -119,6 +119,11 @@ shorthand and nothing else (`owner/repo`, or `owner/repo/subdir`), clones the
 repository, runs the build command from `herdr-plugin.toml` and registers what
 it built. `herdr plugin list` shows which of the two you are running.
 
+Neither one starts anything. Herdr runs `[[startup]]` when a session starts and
+has no hook for install or enable, so a freshly installed or linked plugin sits
+idle until Herdr restarts. That is why `make run` exists: it is the only way to
+see your working tree do something without restarting the session.
+
 ## Working through a ticket
 
 Before changing how a title is decided, read
