@@ -24,8 +24,10 @@ type StubClient struct {
 	processes  map[string][]PaneProcessInfoProcess
 	renames    []RenameCall
 	renameErr  error
+	processErr error
 	callErr    error
 	polls      int
+	reads      int
 }
 
 var _ Client = (*StubClient)(nil)
@@ -94,6 +96,13 @@ func (s *StubClient) SetRenameError(err error) {
 	s.renameErr = err
 }
 
+// SetProcessError makes subsequent pane.process_info calls fail.
+func (s *StubClient) SetProcessError(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.processErr = err
+}
+
 // SetCallError makes every subsequent call fail, as a dropped socket would.
 func (s *StubClient) SetCallError(err error) {
 	s.mu.Lock()
@@ -106,6 +115,14 @@ func (s *StubClient) Renames() []RenameCall {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return slices.Clone(s.renames)
+}
+
+// ProcessReads counts the pane.process_info calls received so far, which is how
+// a test sees that a pane was not asked about twice.
+func (s *StubClient) ProcessReads() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.reads
 }
 
 // Polls counts the snapshots taken so far.
@@ -141,6 +158,9 @@ func (s *StubClient) Call(ctx context.Context, method string, params any, result
 		return nil
 
 	case MethodPaneProcessInfo:
+		if s.processErr != nil {
+			return s.processErr
+		}
 		target, ok := params.(PaneTarget)
 		if !ok {
 			return fmt.Errorf("stub client: unexpected params for %s", method)
@@ -152,6 +172,7 @@ func (s *StubClient) Call(ctx context.Context, method string, params any, result
 		if !ok {
 			return fmt.Errorf("stub client: unexpected result type for %s", method)
 		}
+		s.reads++
 		res.ProcessInfo.ForegroundProcesses = s.processes[target.PaneID]
 		return nil
 

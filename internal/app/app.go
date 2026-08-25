@@ -182,9 +182,28 @@ func labelsOf(tabs []state.TabState) map[string]string {
 	return labels
 }
 
+// processesIn reports what a pane is running, reusing the last read while the
+// pane's revision holds and that read is recent. Neither test is exact, which
+// is why there are two — see docs/architecture/poll-loop.md.
+func (a *App) processesIn(ctx context.Context, client herdr.Client, paneID string) []herdr.PaneProcessInfoProcess {
+	if processes, read := a.changes.Processes(paneID); read {
+		return processes
+	}
+
+	processes, err := herdr.PaneProcesses(ctx, client, paneID)
+	if err != nil {
+		if herdr.ErrorCode(err) != herdr.CodePaneNotFound && ctx.Err() == nil {
+			a.log.Debug("could not read what a pane is running", "pane_id", paneID, "error", err)
+		}
+		return nil
+	}
+	a.changes.Ran(paneID, processes)
+	return processes
+}
+
 // tabsIn assembles the snapshot's tabs with their panes. What is running in a
-// pane needs a request of its own, measured at 0.11 ms — cheaper than the
-// snapshot — so it is made for every pane rather than guessed at.
+// pane needs a request of its own, which processesIn makes only when the last
+// answer will no longer do.
 func (a *App) tabsIn(ctx context.Context, client herdr.Client, snapshot herdr.Snapshot) []state.TabState {
 	workspaces := make(map[string]string, len(snapshot.Workspaces))
 	for _, workspace := range snapshot.Workspaces {
@@ -193,12 +212,9 @@ func (a *App) tabsIn(ctx context.Context, client herdr.Client, snapshot herdr.Sn
 
 	byTab := make(map[string][]*state.PaneState, len(snapshot.Tabs))
 	for _, pane := range snapshot.Panes {
-		processes, err := herdr.PaneProcesses(ctx, client, pane.PaneID)
-		if err != nil && herdr.ErrorCode(err) != herdr.CodePaneNotFound && ctx.Err() == nil {
-			a.log.Debug("could not read what a pane is running", "pane_id", pane.PaneID, "error", err)
-		}
 		byTab[pane.TabID] = append(byTab[pane.TabID],
-			state.PaneFrom(pane, processes, a.changes.ChangedAt(pane.PaneID)))
+			state.PaneFrom(pane, a.processesIn(ctx, client, pane.PaneID),
+				a.changes.ChangedAt(pane.PaneID)))
 	}
 
 	// An unnamed tab carries its place in the workspace, and the snapshot lists
