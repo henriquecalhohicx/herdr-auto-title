@@ -55,21 +55,13 @@ jobs:
             tools/go.sum
       - run: make lint
 
-  cross:
-    name: ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        # The manifest claims linux, macos and windows. Linux is covered above;
-        # these two have never been run.
-        os: [macos-latest, windows-latest]
+  macos:
+    name: macOS
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: stable
       - run: go build ./...
-      # No -race here: it needs a C toolchain on Windows, and the race
-      # detector already runs on every Go version in the check job.
-      - run: go test ./...
+      - run: go test -race ./...

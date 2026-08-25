@@ -24,9 +24,10 @@ make test-v      # the same, verbose
 make check       # fmt + vet + lint + test, run this before every commit
 
 The same four run in CI on every push and pull request
-(`.github/workflows/ci.yml`), plus two things a laptop does not cover: the Go
-version floor the manifest promises, and macOS and Windows, which the manifest
-claims and nobody had ever run.
+(`.github/workflows/ci.yml`), plus the Go version floor the manifest promises,
+which a laptop on the newest toolchain does not cover. Windows was tried once
+and dropped: the fixtures assume Unix paths, so `filepath.IsAbs` rejects every
+directory in them and every tab falls back to `Shell`.
 ```
 
 The suite drives the whole loop through `herdr.StubClient`: the first poll, a
