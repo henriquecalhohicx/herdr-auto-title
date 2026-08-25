@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kryptamine/herdr-auto-title/internal/git"
 	"github.com/kryptamine/herdr-auto-title/internal/herdr"
 )
 
@@ -33,6 +34,10 @@ type PaneState struct {
 	// Processes are the pane's foreground process and its descendants.
 	Processes []Process
 
+	// Git is what the repository holding the pane's directory has checked out,
+	// zero outside a repository.
+	Git git.Checkout
+
 	Focused bool
 	// ChangedAt is when a poll last saw this pane's revision advance.
 	// Snapshots carry no timestamp, so it is the only ordering available.
@@ -47,7 +52,9 @@ type Process struct {
 }
 
 // PaneFrom builds pane context from what a read returned.
-func PaneFrom(info herdr.PaneInfo, processes []herdr.PaneProcessInfoProcess, changedAt time.Time) *PaneState {
+func PaneFrom(info herdr.PaneInfo, processes []herdr.PaneProcessInfoProcess,
+	checkout git.Checkout, changedAt time.Time,
+) *PaneState {
 	return &PaneState{
 		ID:               info.PaneID,
 		CWD:              info.CWD,
@@ -59,6 +66,7 @@ func PaneFrom(info herdr.PaneInfo, processes []herdr.PaneProcessInfoProcess, cha
 		AgentTitle:       info.Title,
 		AgentStatus:      info.AgentStatus,
 		Processes:        processesFrom(processes),
+		Git:              checkout,
 		Focused:          info.Focused,
 		ChangedAt:        changedAt,
 	}

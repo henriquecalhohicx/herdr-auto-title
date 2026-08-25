@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/kryptamine/herdr-auto-title/internal/git"
 	"github.com/kryptamine/herdr-auto-title/internal/herdr"
 	"github.com/kryptamine/herdr-auto-title/internal/resolver"
 	"github.com/kryptamine/herdr-auto-title/internal/state"
@@ -201,6 +202,21 @@ func (a *App) processesIn(ctx context.Context, client herdr.Client, paneID strin
 	return processes
 }
 
+// checkoutIn reports what the repository holding the pane has checked out.
+// Unlike a process read this is not cached: it is two small file reads at
+// 0.038 ms against a snapshot's 0.47 ms, so a fresh answer costs less than
+// remembering a stale one — see docs/architecture/title-resolution.md.
+func checkoutIn(pane herdr.PaneInfo) git.Checkout {
+	// The shell's own directory, for the same reason the CWD source prefers it:
+	// it names the project more stably than whatever is running right now.
+	dir := pane.CWD
+	if dir == "" {
+		dir = pane.ForegroundCWD
+	}
+	checkout, _ := git.Read(dir)
+	return checkout
+}
+
 // tabsIn assembles the snapshot's tabs with their panes. What is running in a
 // pane needs a request of its own, which processesIn makes only when the last
 // answer will no longer do.
@@ -214,7 +230,7 @@ func (a *App) tabsIn(ctx context.Context, client herdr.Client, snapshot herdr.Sn
 	for _, pane := range snapshot.Panes {
 		byTab[pane.TabID] = append(byTab[pane.TabID],
 			state.PaneFrom(pane, a.processesIn(ctx, client, pane.PaneID),
-				a.changes.ChangedAt(pane.PaneID)))
+				checkoutIn(pane), a.changes.ChangedAt(pane.PaneID)))
 	}
 
 	// An unnamed tab carries its place in the workspace, and the snapshot lists

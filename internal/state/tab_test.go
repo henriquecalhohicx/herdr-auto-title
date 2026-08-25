@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kryptamine/herdr-auto-title/internal/git"
 	"github.com/kryptamine/herdr-auto-title/internal/herdr"
 )
 
@@ -72,7 +73,7 @@ func TestPaneFromReadsAgentContext(t *testing.T) {
 		Agent:                 "claude",
 		DisplayAgent:          "Claude Code",
 		AgentStatus:           herdr.AgentStatusWorking,
-	}, nil, stamp)
+	}, nil, git.Checkout{}, stamp)
 
 	switch {
 	case pane.TerminalTitle != "Claude Code":
@@ -89,7 +90,7 @@ func TestPaneFromReadsAgentContext(t *testing.T) {
 }
 
 func TestPaneWithoutAnAgent(t *testing.T) {
-	pane := PaneFrom(herdr.PaneInfo{PaneID: "wE:p1", AgentStatus: herdr.AgentStatusUnknown}, nil, time.Now())
+	pane := PaneFrom(herdr.PaneInfo{PaneID: "wE:p1", AgentStatus: herdr.AgentStatusUnknown}, nil, git.Checkout{}, time.Now())
 	if pane.HasAgent() || pane.AgentIsActive() {
 		t.Errorf("pane %+v reported an agent", pane)
 	}

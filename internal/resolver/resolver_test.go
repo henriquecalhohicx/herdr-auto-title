@@ -165,7 +165,7 @@ func TestATabDoesNotRepeatItsWorkspace(t *testing.T) {
 	})
 	tab.WorkspaceName = "dashboard"
 
-	got := Default(DefaultMaxLength).Resolve(tab)
+	got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(tab)
 	if got.Name != "Fix OAuth redirect" {
 		t.Errorf("name = %q, want %q", got.Name, "Fix OAuth redirect")
 	}
@@ -177,7 +177,7 @@ func TestATabWithNothingElseKeepsItsContext(t *testing.T) {
 	tab := tabWithPane(&state.PaneState{CWD: "/Users/dev/work/dashboard"})
 	tab.WorkspaceName = "dashboard"
 
-	got := Default(DefaultMaxLength).Resolve(tab)
+	got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(tab)
 	if got.Name != "dashboard" {
 		t.Errorf("name = %q, want dashboard", got.Name)
 	}
@@ -192,7 +192,7 @@ func TestADifferentWorkspaceIsNotDropped(t *testing.T) {
 	})
 	tab.WorkspaceName = "api"
 
-	got := Default(DefaultMaxLength).Resolve(tab)
+	got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(tab)
 	if want := "dashboard › Fix OAuth redirect"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
@@ -205,7 +205,7 @@ func TestAWorkspaceWithoutAName(t *testing.T) {
 		TerminalTitle: "Fix OAuth redirect",
 	})
 
-	got := Default(DefaultMaxLength).Resolve(tab)
+	got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(tab)
 	if want := "dashboard › Fix OAuth redirect"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
@@ -215,7 +215,7 @@ func TestTheShippedChainIsAWellFormedLadder(t *testing.T) {
 	// Confidences used to be repeated in every result a source returned, and
 	// the chain's order was a second, unchecked statement of the same ladder.
 	// Now the numbers are the only statement, so they have to hold up.
-	chain := Default(DefaultMaxLength)
+	chain := Default(DefaultMaxLength, DefaultBranchMaxLength)
 
 	seen := make(map[int]string, len(chain.sources))
 	previous := 0
@@ -266,7 +266,7 @@ func TestCWDSourceOnANilPane(t *testing.T) {
 }
 
 func TestTheShippedChainResolvesATabWithNoPanes(t *testing.T) {
-	got := Default(DefaultMaxLength).Resolve(state.TabState{ID: "wE:t1"})
+	got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(state.TabState{ID: "wE:t1"})
 	if got.Name != GenericFallback {
 		t.Errorf("name = %q, want %q", got.Name, GenericFallback)
 	}

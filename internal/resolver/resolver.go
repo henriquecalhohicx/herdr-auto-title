@@ -23,6 +23,7 @@ const GenericFallback = "Shell"
 const (
 	ConfidenceFallback      = 10
 	ConfidenceCWD           = 30
+	ConfidenceGit           = 40
 	ConfidenceSSH           = 60
 	ConfidenceProcess       = 70
 	ConfidenceTerminalTitle = 80
@@ -30,9 +31,12 @@ const (
 )
 
 // Parts are the components a source contributes to a title, formatted as
-// "<context> › <activity>". A source may supply either or both.
+// "<context> › <branch> › <activity>". A source may supply any of them.
 type Parts struct {
-	Context  string
+	Context string
+	// Branch qualifies the context rather than standing on its own: a branch
+	// is part of where the user is, not of what they are doing.
+	Branch   string
 	Activity string
 }
 
@@ -85,12 +89,13 @@ func New(maxLength int, sources ...Source) *Deterministic {
 
 // Default builds the resolver Auto Title ships with, so the binary and the
 // tests cannot drift apart on what the chain contains.
-func Default(maxLength int) *Deterministic {
+func Default(maxLength, branchMax int) *Deterministic {
 	return New(maxLength,
 		NewAgent(),
 		NewTerminalTitle(),
 		NewProcess(),
 		NewSSH(),
+		NewGit(branchMax),
 		NewCWD(),
 	)
 }
@@ -138,10 +143,17 @@ func (d *Deterministic) collect(pane *state.PaneState) collected {
 func (c *collected) take(source Source, parts Parts) {
 	// The activity is what a title is about, so its source answers for the
 	// title whenever one turns up. A context is credited only while no activity
-	// has been found.
+	// has been found, and a branch is credited on the same terms: it says where
+	// the user is, not what they are doing.
 	if c.parts.Activity == "" && parts.Activity != "" {
 		c.parts.Activity = parts.Activity
 		c.credit(source)
+	}
+	if c.parts.Branch == "" && parts.Branch != "" {
+		c.parts.Branch = parts.Branch
+		if c.reason == "" {
+			c.credit(source)
+		}
 	}
 	if c.parts.Context == "" && parts.Context != "" {
 		c.parts.Context = parts.Context
@@ -156,6 +168,9 @@ func (c *collected) credit(source Source) {
 	c.confidence = source.Confidence()
 }
 
+// complete stops the walk once both halves of a title are answered. The branch
+// is not required: a tab outside a repository has none, and waiting for one
+// would only walk sources that have already been outranked.
 func (c *collected) complete() bool {
 	return c.parts.Context != "" && c.parts.Activity != ""
 }
@@ -169,9 +184,16 @@ func withoutRepetition(parts Parts, workspace string) Parts {
 		parts.Activity = ""
 	}
 
+	// A prompt that carries the branch in the window title would otherwise
+	// produce `feat/oauth › feat/oauth`.
+	if parts.Branch != "" && strings.EqualFold(parts.Activity, parts.Branch) {
+		parts.Activity = ""
+	}
+
 	// Herdr shows the workspace above its tabs, so repeating it wastes half the
-	// width. Dropped only when something else remains.
-	if parts.Activity != "" && strings.EqualFold(parts.Context, workspace) {
+	// width. Dropped only when something else remains — the branch counts,
+	// which is what keeps `feat/oauth › nvim` from losing where it is.
+	if (parts.Activity != "" || parts.Branch != "") && strings.EqualFold(parts.Context, workspace) {
 		parts.Context = ""
 	}
 

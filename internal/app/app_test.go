@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -28,7 +29,7 @@ func discardLogger() *slog.Logger {
 func testResolver(t *testing.T) resolver.TitleResolver {
 	t.Helper()
 	t.Setenv("HOME", filepath.Join(t.TempDir(), "home"))
-	return resolver.Default(resolver.DefaultMaxLength)
+	return resolver.Default(resolver.DefaultMaxLength, resolver.DefaultBranchMaxLength)
 }
 
 // harness runs an App against a stubbed Herdr session.
@@ -594,5 +595,61 @@ func TestAPaneThatCannotBeReadIsAskedAgain(t *testing.T) {
 
 	if got := h.awaitRenames(2)[1].Label; got != "dashboard › nvim" {
 		t.Errorf("rename = %q, want %q", got, "dashboard › nvim")
+	}
+}
+
+// repoAt builds a repository on disk, since the branch is the one thing a poll
+// reads from the filesystem rather than from the session.
+func repoAt(t *testing.T, branch, defaultBranch string) string {
+	t.Helper()
+	root := t.TempDir()
+	gitDir := filepath.Join(root, ".git")
+	remote := filepath.Join(gitDir, "refs", "remotes", "origin")
+	if err := os.MkdirAll(remote, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(path, content string) {
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(filepath.Join(gitDir, "HEAD"), "ref: refs/heads/"+branch+"\n")
+	write(filepath.Join(remote, "HEAD"), "ref: refs/remotes/origin/"+defaultBranch+"\n")
+	return root
+}
+
+func TestAPollNamesATabAfterItsBranch(t *testing.T) {
+	repo := repoAt(t, "feat/oauth", "main")
+
+	h := start(t,
+		[]herdr.TabInfo{{TabID: "wE:t1", Label: "1"}},
+		[]herdr.PaneInfo{{PaneID: "wE:p1", TabID: "wE:t1", CWD: repo, Focused: true}},
+	)
+
+	renames := h.awaitRenames(1)
+	if want := filepath.Base(repo) + " › feat/oauth"; renames[0].Label != want {
+		t.Errorf("rename = %q, want %q", renames[0].Label, want)
+	}
+}
+
+func TestCheckingOutABranchRetitlesTheTab(t *testing.T) {
+	// Nothing in the session announces a checkout, and the pane's revision does
+	// not have to move for one — the next poll simply reads HEAD again.
+	repo := repoAt(t, "main", "main")
+
+	h := start(t,
+		[]herdr.TabInfo{{TabID: "wE:t1", Label: "1"}},
+		[]herdr.PaneInfo{{PaneID: "wE:p1", TabID: "wE:t1", CWD: repo, Focused: true}},
+	)
+	h.awaitRenames(1)
+
+	head := filepath.Join(repo, ".git", "HEAD")
+	if err := os.WriteFile(head, []byte("ref: refs/heads/feat/oauth\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	renames := h.awaitRenames(2)
+	if want := filepath.Base(repo) + " › feat/oauth"; renames[1].Label != want {
+		t.Errorf("rename = %q, want %q", renames[1].Label, want)
 	}
 }
