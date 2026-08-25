@@ -1,7 +1,6 @@
 package resolver
 
 import (
-	"context"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -41,7 +40,7 @@ func TestResolveFromCWD(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := r.Resolve(context.Background(), tabWithCWD(tc.cwd))
+			got := r.Resolve(tabWithCWD(tc.cwd))
 			if got.Name != tc.want {
 				t.Errorf("name = %q, want %q", got.Name, tc.want)
 			}
@@ -61,7 +60,7 @@ func TestResolveFallsBackToForegroundCWD(t *testing.T) {
 		},
 	}
 
-	if got := r.Resolve(context.Background(), tab); got.Name != "api" {
+	if got := r.Resolve(tab); got.Name != "api" {
 		t.Errorf("name = %q, want %q", got.Name, "api")
 	}
 }
@@ -69,7 +68,7 @@ func TestResolveFallsBackToForegroundCWD(t *testing.T) {
 func TestResolveTabWithoutPanes(t *testing.T) {
 	r := New(DefaultMaxLength, NewCWD())
 
-	got := r.Resolve(context.Background(), state.TabState{ID: "wE:t1"})
+	got := r.Resolve(state.TabState{ID: "wE:t1"})
 	if got.Name != GenericFallback {
 		t.Errorf("name = %q, want %q", got.Name, GenericFallback)
 	}
@@ -79,7 +78,7 @@ func TestResolveTruncatesToMaxLength(t *testing.T) {
 	long := strings.Repeat("x", 100)
 	r := New(10, NewCWD())
 
-	got := r.Resolve(context.Background(), tabWithCWD("/Users/dev/"+long))
+	got := r.Resolve(tabWithCWD("/Users/dev/" + long))
 	if len([]rune(got.Name)) != 10 {
 		t.Errorf("name %q has %d runes, want 10", got.Name, len([]rune(got.Name)))
 	}
@@ -96,10 +95,10 @@ func TestResolveIsDeterministic(t *testing.T) {
 		},
 	}
 
-	first := r.Resolve(context.Background(), tab)
+	first := r.Resolve(tab)
 	// Map iteration order varies between runs; the decision must not.
 	for i := 0; i < 50; i++ {
-		if got := r.Resolve(context.Background(), tab); got != first {
+		if got := r.Resolve(tab); got != first {
 			t.Fatalf("resolution %d = %+v, want %+v", i, got, first)
 		}
 	}
@@ -124,7 +123,7 @@ func TestHigherPrioritySourceSuppliesActivity(t *testing.T) {
 		NewCWD(),
 	)
 
-	got := r.Resolve(context.Background(), tabWithCWD("/Users/dev/work/dashboard"))
+	got := r.Resolve(tabWithCWD("/Users/dev/work/dashboard"))
 	if got.Name != "dashboard › Tests" {
 		t.Errorf("name = %q, want %q", got.Name, "dashboard › Tests")
 	}
@@ -139,7 +138,7 @@ func TestHigherPrioritySourceOverridesContext(t *testing.T) {
 		NewCWD(),
 	)
 
-	got := r.Resolve(context.Background(), tabWithCWD("/Users/dev/work/dashboard"))
+	got := r.Resolve(tabWithCWD("/Users/dev/work/dashboard"))
 	if got.Name != "prod-01 › SSH" {
 		t.Errorf("name = %q, want %q", got.Name, "prod-01 › SSH")
 	}
@@ -151,7 +150,7 @@ func TestSourceThatDeclinesIsSkipped(t *testing.T) {
 		NewCWD(),
 	)
 
-	got := r.Resolve(context.Background(), tabWithCWD("/Users/dev/work/dashboard"))
+	got := r.Resolve(tabWithCWD("/Users/dev/work/dashboard"))
 	if got.Name != "dashboard" || got.Reason != "cwd" {
 		t.Errorf("decision = %+v, want dashboard via cwd", got)
 	}
@@ -166,7 +165,7 @@ func TestATabDoesNotRepeatItsWorkspace(t *testing.T) {
 	})
 	tab.WorkspaceName = "dashboard"
 
-	got := Default(DefaultMaxLength).Resolve(context.Background(), tab)
+	got := Default(DefaultMaxLength).Resolve(tab)
 	if got.Name != "Fix OAuth redirect" {
 		t.Errorf("name = %q, want %q", got.Name, "Fix OAuth redirect")
 	}
@@ -178,7 +177,7 @@ func TestATabWithNothingElseKeepsItsContext(t *testing.T) {
 	tab := tabWithPane(&state.PaneState{CWD: "/Users/dev/work/dashboard"})
 	tab.WorkspaceName = "dashboard"
 
-	got := Default(DefaultMaxLength).Resolve(context.Background(), tab)
+	got := Default(DefaultMaxLength).Resolve(tab)
 	if got.Name != "dashboard" {
 		t.Errorf("name = %q, want dashboard", got.Name)
 	}
@@ -193,7 +192,7 @@ func TestADifferentWorkspaceIsNotDropped(t *testing.T) {
 	})
 	tab.WorkspaceName = "api"
 
-	got := Default(DefaultMaxLength).Resolve(context.Background(), tab)
+	got := Default(DefaultMaxLength).Resolve(tab)
 	if want := "dashboard › Fix OAuth redirect"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
@@ -206,7 +205,7 @@ func TestAWorkspaceWithoutAName(t *testing.T) {
 		TerminalTitle: "Fix OAuth redirect",
 	})
 
-	got := Default(DefaultMaxLength).Resolve(context.Background(), tab)
+	got := Default(DefaultMaxLength).Resolve(tab)
 	if want := "dashboard › Fix OAuth redirect"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
@@ -250,7 +249,7 @@ func TestSourcesAreOrderedByConfidenceNotByArgument(t *testing.T) {
 		New(DefaultMaxLength, high, low),
 		New(DefaultMaxLength, low, high),
 	} {
-		got := chain.Resolve(context.Background(), tab)
+		got := chain.Resolve(tab)
 		if got.Name != "high" {
 			t.Errorf("name = %q, want high", got.Name)
 		}

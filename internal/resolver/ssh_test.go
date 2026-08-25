@@ -1,7 +1,6 @@
 package resolver
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -62,7 +61,7 @@ func TestTheHostBecomesTheContext(t *testing.T) {
 func TestTheTabIsNamedAfterTheMarkedHost(t *testing.T) {
 	pane := sshPane("/Users/dev/work/dashboard", "ssh", "root@prod-01")
 
-	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
+	got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(pane))
 	if want := "ssh › prod-01"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
@@ -78,20 +77,35 @@ func TestTheHostOutranksTheWorkingDirectory(t *testing.T) {
 	// The local directory of a pane running ssh describes the wrong machine.
 	pane := sshPane("/Users/dev/work/dashboard", "ssh", "prod-01")
 
-	if got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane)); got.Name != "ssh › prod-01" {
+	if got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(pane)); got.Name != "ssh › prod-01" {
 		t.Errorf("name = %q, want %q", got.Name, "ssh › prod-01")
 	}
 }
 
 func TestAnUnreadableDestinationStillMarksTheTabRemote(t *testing.T) {
 	// Herdr could not read argv, or ssh was invoked with no destination at all.
+	// The mark stands alone rather than letting the working directory claim the
+	// context, which would name a remote tab after a local directory.
 	for _, argv := range [][]string{nil, {"ssh"}, {"ssh", "-p", "2222"}, {"ssh", "-"}} {
 		pane := sshPane("/Users/dev/work/dashboard", argv...)
 
-		got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
-		if want := "dashboard › SSH"; got.Name != want {
+		got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(pane))
+		if want := "ssh"; got.Name != want {
 			t.Errorf("argv %v → %q, want %q", argv, got.Name, want)
 		}
+	}
+}
+
+func TestAnUnreadableDestinationKeepsTheMarkUnderARemoteTitle(t *testing.T) {
+	// The case the activity slot lost: with no host to bind the mark to it used
+	// to go into the activity, where the remote shell's own title outranked it
+	// and the tab read exactly like a local one.
+	pane := sshPane("/Users/dev/work/dashboard")
+	pane.TerminalTitle = "Restart the queue workers"
+
+	got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(pane))
+	if want := "ssh › Restart the queue workers"; got.Name != want {
+		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 }
 
@@ -104,8 +118,8 @@ func TestAPaneWithoutSSHIsUnaffected(t *testing.T) {
 		},
 	}
 
-	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
-	if strings.Contains(got.Name, "ssh") || strings.Contains(got.Name, SSHActivity) {
+	got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(pane))
+	if strings.Contains(strings.ToLower(got.Name), "ssh") {
 		t.Errorf("name = %q, want nothing about ssh", got.Name)
 	}
 }
@@ -122,7 +136,7 @@ func TestSSHIsFoundAmongOtherProcesses(t *testing.T) {
 		},
 	}
 
-	if got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane)); got.Name != "ssh › prod-01" {
+	if got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(pane)); got.Name != "ssh › prod-01" {
 		t.Errorf("name = %q, want %q", got.Name, "ssh › prod-01")
 	}
 }
@@ -134,7 +148,7 @@ func TestTheMarkSurvivesARemoteTitle(t *testing.T) {
 	pane := sshPane("/Users/dev/work/dashboard", "ssh", "prod-01")
 	pane.TerminalTitle = "Restart the queue workers"
 
-	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
+	got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(pane))
 	if want := "ssh › prod-01 › Restart the queue workers"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
@@ -150,7 +164,7 @@ func TestHostsFromArgvAreSanitized(t *testing.T) {
 	// argv is terminal-derived input like any other.
 	pane := sshPane("/Users/dev/work/dashboard", "ssh", "root@prod\x1b[31m-01")
 
-	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
+	got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(pane))
 	if strings.ContainsRune(got.Name, '\x1b') {
 		t.Errorf("name = %q, still carries an escape", got.Name)
 	}

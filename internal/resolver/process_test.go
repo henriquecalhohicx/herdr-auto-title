@@ -1,7 +1,6 @@
 package resolver
 
 import (
-	"context"
 	"testing"
 
 	"github.com/kryptamine/herdr-auto-title/internal/state"
@@ -24,7 +23,7 @@ func TestTheKindQualifiesTheTitle(t *testing.T) {
 		Processes:     running("nvim"),
 	}
 
-	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
+	got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(pane))
 	if want := "dashboard › nvim › auth.provider.ts"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
@@ -38,7 +37,7 @@ func TestAKindWithNothingToAddStandsAlone(t *testing.T) {
 		Processes:     running("nvim"),
 	}
 
-	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
+	got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(pane))
 	if want := "dashboard › nvim"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
@@ -47,7 +46,7 @@ func TestAKindWithNothingToAddStandsAlone(t *testing.T) {
 func TestAKindWithNoTitleAtAllStillNamesThePane(t *testing.T) {
 	pane := &state.PaneState{CWD: "/Users/dev/work/dashboard", Processes: running("htop")}
 
-	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
+	got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(pane))
 	if want := "dashboard › htop"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
@@ -96,7 +95,7 @@ func TestARemoteSessionIsNotNamedTwice(t *testing.T) {
 	if got := paneKind(pane); got != "" {
 		t.Errorf("paneKind = %q, want empty", got)
 	}
-	if got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane)); got.Name != "ssh › prod-01" {
+	if got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(pane)); got.Name != "ssh › prod-01" {
 		t.Errorf("name = %q, want ssh › prod-01", got.Name)
 	}
 }
@@ -127,7 +126,7 @@ func TestAProjectNeverTakesAColon(t *testing.T) {
 		Processes:     running("esbuild", "node", "node"),
 	}
 
-	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
+	got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(pane))
 	if want := "self-care-portal › yarn dev"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
@@ -153,7 +152,7 @@ func TestAnAgentIsItsOwnKind(t *testing.T) {
 	if got := paneKind(pane); got != "claude" {
 		t.Errorf("paneKind = %q, want claude", got)
 	}
-	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
+	got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(pane))
 	if want := "dashboard › claude › Git email configuration"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
@@ -168,7 +167,7 @@ func TestAStartingAgentIsNamedByItsKindAlone(t *testing.T) {
 		Agent:         "claude",
 	}
 
-	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
+	got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(pane))
 	if want := "dashboard › claude"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
@@ -177,7 +176,7 @@ func TestAStartingAgentIsNamedByItsKindAlone(t *testing.T) {
 func TestAPaneWithoutAnAgentIsNotNamedAfterOne(t *testing.T) {
 	pane := &state.PaneState{CWD: "/Users/dev/work/dashboard", TerminalTitle: "Claude Code"}
 
-	if got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane)); got.Name != "dashboard" {
+	if got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(pane)); got.Name != "dashboard" {
 		t.Errorf("name = %q, want dashboard", got.Name)
 	}
 }

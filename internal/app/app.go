@@ -93,7 +93,7 @@ func (f *failureLog) failed() int {
 	if f.run < f.next {
 		return 0
 	}
-	f.next = max(1, f.run*2)
+	f.next = f.run * 2
 	return f.run
 }
 
@@ -127,7 +127,7 @@ func (a *App) poll(ctx context.Context, client herdr.Client) error {
 			continue
 		}
 
-		decision := a.titles.Resolve(ctx, tab)
+		decision := a.titles.Resolve(tab)
 		if a.manual.Observe(state.Sighting{
 			TabID:   tab.ID,
 			Current: tab.CurrentName,
@@ -164,6 +164,8 @@ func (a *App) poll(ctx context.Context, client herdr.Client) error {
 		)
 	}
 
+	// Reached only when every tab was seen. Deferring this would settle after a
+	// poll cut short, and the tabs it missed would look new and already named.
 	a.manual.Settled()
 	return nil
 }

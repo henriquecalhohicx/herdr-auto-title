@@ -1,7 +1,6 @@
 package resolver
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -25,7 +24,7 @@ func titleResolver(maxLength int) *Deterministic {
 }
 
 func TestTerminalTitleBeatsTheWorkingDirectory(t *testing.T) {
-	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(&state.PaneState{
+	got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(&state.PaneState{
 		CWD:           "/Users/dev/work/dashboard",
 		TerminalTitle: "Fix OAuth redirect",
 	}))
@@ -45,7 +44,7 @@ func TestGenericTerminalTitleFallsThrough(t *testing.T) {
 	// Every one of these was observed on a live Herdr session.
 	for _, title := range []string{"zsh", "Claude Code", "node", "~", "~/W/dashboard", ""} {
 		t.Run(title, func(t *testing.T) {
-			got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(&state.PaneState{
+			got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(&state.PaneState{
 				CWD:           "/Users/dev/work/dashboard",
 				TerminalTitle: title,
 			}))
@@ -61,7 +60,7 @@ func TestGenericTerminalTitleFallsThrough(t *testing.T) {
 }
 
 func TestTerminalTitleFallsBackToTheRawField(t *testing.T) {
-	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(&state.PaneState{
+	got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(&state.PaneState{
 		CWD:              "/Users/dev/work/dashboard",
 		TerminalTitleRaw: "\x1b[32m✳ Fix OAuth redirect\x1b[0m",
 	}))
@@ -73,7 +72,7 @@ func TestTerminalTitleFallsBackToTheRawField(t *testing.T) {
 }
 
 func TestStrippedTerminalTitleWinsOverTheRawOne(t *testing.T) {
-	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(&state.PaneState{
+	got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(&state.PaneState{
 		CWD:              "/Users/dev/work/dashboard",
 		TerminalTitle:    "Fix OAuth redirect",
 		TerminalTitleRaw: "◐ Fix OAuth redirect",
@@ -85,7 +84,7 @@ func TestStrippedTerminalTitleWinsOverTheRawOne(t *testing.T) {
 }
 
 func TestTerminalTitleIsSanitized(t *testing.T) {
-	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(&state.PaneState{
+	got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(&state.PaneState{
 		CWD:           "/Users/dev/work/dashboard",
 		TerminalTitle: "\x1b[31mFix OAuth\nredirect\x1b[0m\t",
 	}))
@@ -96,7 +95,7 @@ func TestTerminalTitleIsSanitized(t *testing.T) {
 }
 
 func TestLongTerminalTitleIsTruncatedAsAWhole(t *testing.T) {
-	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(&state.PaneState{
+	got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(&state.PaneState{
 		CWD:           "/Users/dev/work/dashboard",
 		TerminalTitle: strings.Repeat("long ", 40),
 	}))
@@ -110,7 +109,7 @@ func TestLongTerminalTitleIsTruncatedAsAWhole(t *testing.T) {
 }
 
 func TestTerminalTitleWithoutAWorkingDirectory(t *testing.T) {
-	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(&state.PaneState{
+	got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(&state.PaneState{
 		TerminalTitle: "Fix OAuth redirect",
 	}))
 
@@ -121,7 +120,7 @@ func TestTerminalTitleWithoutAWorkingDirectory(t *testing.T) {
 }
 
 func TestTerminalTitleRepeatingTheContextIsDropped(t *testing.T) {
-	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(&state.PaneState{
+	got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(&state.PaneState{
 		CWD:           "/Users/dev/work/dashboard",
 		TerminalTitle: "Dashboard",
 	}))
@@ -132,7 +131,7 @@ func TestTerminalTitleRepeatingTheContextIsDropped(t *testing.T) {
 }
 
 func TestTerminalTitleWithNothingElse(t *testing.T) {
-	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(&state.PaneState{
+	got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(&state.PaneState{
 		TerminalTitle: "zsh",
 	}))
 
@@ -164,7 +163,7 @@ func TestEditorTitleKeepsTheFileAndDropsThePath(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.title, func(t *testing.T) {
-			got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(&state.PaneState{
+			got := titleResolver(DefaultMaxLength).Resolve(tabWithPane(&state.PaneState{
 				CWD:           "/Users/dev/Work/herdr-auto-title",
 				TerminalTitle: tc.title,
 			}))

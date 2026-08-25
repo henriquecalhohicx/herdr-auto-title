@@ -122,8 +122,13 @@ machine, so the host slot has no such competition.
 The user is dropped: `root@prod-01` and `deploy@prod-01` are the same machine,
 and a tab bar has no room to say who is logged in. Options are parsed rather
 than guessed at, so `ssh -p 2222 prod-01` and
-`ssh prod-01 tail -f /var/log/syslog` both yield `prod-01`. A destination that
-cannot be read still marks the tab remote, as `dashboard › SSH`.
+`ssh prod-01 tail -f /var/log/syslog` both yield `prod-01`.
+
+A destination that cannot be read leaves the mark standing alone, as `ssh`,
+rather than letting the working directory take the context. It briefly did the
+opposite — with no host to bind to, the mark went into the activity slot — and
+that put it back in the contested half, where the remote shell's own title
+outranked it and a remote tab read exactly like a local one.
 
 ### The git branch, and why it is gone
 

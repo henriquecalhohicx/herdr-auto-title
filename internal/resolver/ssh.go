@@ -11,9 +11,6 @@ const (
 	// the host, not the activity, which the terminal title would outrank —
 	// see docs/architecture/title-resolution.md.
 	sshKind = "ssh"
-	// SSHActivity marks a session whose host could not be read, where there is
-	// no host to bind the kind to.
-	SSHActivity = "SSH"
 )
 
 // sshFlagsWithValue are the options whose value is a separate argument, so
@@ -48,12 +45,12 @@ func (SSH) Resolve(pane *state.PaneState) (Parts, bool) {
 		return Parts{}, false
 	}
 
-	// A session whose destination cannot be read is still worth marking as
-	// remote; the working directory then supplies the context and the mark has
-	// to go in the activity instead.
+	// With no host to bind it to the mark stands alone, but it still goes in
+	// the context slot: an activity would be outranked by the remote shell's
+	// own title, exactly when the tab most needs to say it is remote.
 	host := Sanitize(sshHost(args), 0)
 	if host == "" {
-		return Parts{Activity: SSHActivity}, true
+		return Parts{Context: sshKind}, true
 	}
 	return Parts{Context: qualify(host, sshKind)}, true
 }

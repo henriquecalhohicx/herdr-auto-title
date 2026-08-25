@@ -4,7 +4,6 @@
 package resolver
 
 import (
-	"context"
 	"sort"
 	"strings"
 
@@ -58,7 +57,7 @@ type Decision struct {
 
 // TitleResolver produces a title for a tab.
 type TitleResolver interface {
-	Resolve(ctx context.Context, tab state.TabState) Decision
+	Resolve(tab state.TabState) Decision
 }
 
 // Deterministic resolves titles from a fixed priority list of sources.
@@ -96,7 +95,7 @@ func Default(maxLength int) *Deterministic {
 
 // Resolve names a tab in three steps: ask the sources what they see, drop the
 // parts that only repeat something already on screen, and assemble the rest.
-func (d *Deterministic) Resolve(_ context.Context, tab state.TabState) Decision {
+func (d *Deterministic) Resolve(tab state.TabState) Decision {
 	found := d.collect(state.SelectContextPane(tab))
 	found.parts = withoutRepetition(found.parts, tab.WorkspaceName)
 
