@@ -14,8 +14,8 @@ title, an ssh destination — originates in terminal output or in a path someone
 chose. All of it is treated as untrusted input.
 
 The one rule that is never bent: **nothing derived from terminal output is
-passed to a shell.** Renames go over the socket API, and `git` is executed with
-an argument vector, never through `sh -c`.
+passed to a shell.** Renames go over the socket API, and Auto Title runs no
+subprocess at all — there is no `sh -c` anywhere to pass anything to.
 
 ## Cleaning
 

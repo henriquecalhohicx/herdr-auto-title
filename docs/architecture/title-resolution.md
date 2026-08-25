@@ -51,7 +51,7 @@ rather than by the order the sources happen to be listed in
 | 90 | Agent title | `agent.go` | Activity |
 | 80 | Terminal title | `terminal.go` | Activity |
 | 70 | Foreground process | `process.go` | Activity |
-| 60 | SSH session | `ssh.go` | Context (and Activity when bare) |
+| 60 | SSH session | `ssh.go` | Context |
 | 30 | Working directory | `cwd.go` | Context |
 | 10 | Generic fallback | `resolver.go` | the whole name (`Shell`) |
 
