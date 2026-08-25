@@ -95,7 +95,10 @@ changes name at most once per poll however fast its pane is churning, so
 3. `tabsIn` — assemble tabs with their panes, asking `pane.process_info` about
    the panes that moved since they were last read and reusing the last answer
    for the rest. A pane whose processes cannot be read simply has none, and a
-   failed read is not remembered as an answer.
+   failed read is not remembered as an answer. Each pane's directory is read for
+   the branch it has checked out, every poll and without a cache: two small file
+   reads at 0.038 ms are cheaper than the bookkeeping that would keep a stale
+   answer — see [title resolution](./title-resolution.md#the-git-branch).
 4. `Manual.Retain` — drop bookkeeping for tabs the session no longer holds.
 5. Per tab: skip it if locked, otherwise resolve a title, check whether the
    label moved under us, and rename when the result differs from the label the

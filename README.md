@@ -51,6 +51,7 @@ will run.
 
 ```
 ~/work/dashboard                       →  dashboard
+~/work/dashboard on feature/MC-13200   →  dashboard › MC-13200
 nvim editing auth.provider.ts          →  nvim › auth.provider.ts
 an agent working on OAuth scopes       →  dashboard › claude › Implement OAuth scopes
 ssh into prod-01                       →  ssh › prod-01
@@ -60,12 +61,17 @@ $HOME                                  →  Shell
 Titles read `<context> › <activity>`, capped at 64 columns of the tab bar. The
 activity is the first of these that has something to say: what an agent reports
 it is working on, then the terminal title, then a lone program in the pane. The
-context is the directory you are in, or the machine you reached over `ssh`.
+context is the directory you are in, or the machine you reached over `ssh`, and
+the branch you have checked out qualifies it.
 
 Four rules explain most surprises:
 
 - Auto Title never repeats your workspace name, because Herdr already shows it
   above the tabs.
+- **A branch shows when it distinguishes.** Your repository's own default
+  branch says nothing, so it is left out; anything else is shown, shortened to
+  what identifies it (`bugfix-asa-cpanel-uapi-mc-13675` → `MC-13675`) when it is
+  too long for the tab bar.
 - It drops paths, shell prompts and bare program names, which only say again
   where you are.
 - A tab with several panes takes its name from one of them: the focused pane, a
