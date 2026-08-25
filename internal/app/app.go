@@ -4,7 +4,6 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"time"
 
@@ -47,10 +46,10 @@ func New(cfg Config, log *slog.Logger, titles resolver.TitleResolver) *App {
 // that no longer exists, while a snapshot always describes the present and
 // costs one request whatever the session holds.
 func (a *App) Run(ctx context.Context, client herdr.Client) error {
+	var failures failureLog
+
 	// Name what already exists before waiting for the first tick.
-	if err := a.poll(ctx, client); err != nil {
-		return fmt.Errorf("first poll: %w", err)
-	}
+	a.attempt(ctx, client, &failures)
 
 	ticker := time.NewTicker(a.cfg.Poll)
 	defer ticker.Stop()
@@ -61,17 +60,62 @@ func (a *App) Run(ctx context.Context, client herdr.Client) error {
 			a.log.Info("shutting down")
 			return nil
 		case <-ticker.C:
-			if err := a.poll(ctx, client); err != nil {
-				if ctx.Err() != nil {
-					continue
-				}
-				// A single failed poll is not fatal: Herdr may be busy, or a
-				// tab may have closed underneath the request. The next tick
-				// tries again.
-				a.log.Warn("poll failed", "error", err)
-			}
+			a.attempt(ctx, client, &failures)
 		}
 	}
+}
+
+// attempt polls once and reports how it went, on the schedule failures keep.
+//
+// No poll failing is fatal, the first one included. Herdr may be busy, a tab
+// may have closed underneath the request, or Herdr may not be running at all —
+// its socket can be a moment behind the plugin it launched. Nothing is carried
+// between polls that a failure spoils, so the next tick simply tries again, and
+// polls keep their usual rate through an outage so that recovery is immediate.
+func (a *App) attempt(ctx context.Context, client herdr.Client, failures *failureLog) {
+	err := a.poll(ctx, client)
+	if ctx.Err() != nil {
+		return
+	}
+	if err != nil {
+		if run := failures.failed(); run > 0 {
+			a.log.Warn("poll failed", "error", err, "in a row", run)
+		}
+		return
+	}
+	if run := failures.recovered(); run > 0 {
+		a.log.Info("the session is answering again", "polls missed", run)
+	}
+}
+
+// failureLog decides how often a run of failing polls is worth mentioning.
+//
+// Polls run twice a second, so logging every failure turns an hour of Herdr
+// being down into thousands of identical lines. Logging only as the run doubles
+// keeps the first failure prompt and the rest proportionate: an hour costs a
+// dozen lines and still says how long it has been going on.
+type failureLog struct {
+	run  int
+	next int
+}
+
+// failed records a failed poll and returns the length of the run when it is
+// worth logging, or zero when it is not.
+func (f *failureLog) failed() int {
+	f.run++
+	if f.run < f.next {
+		return 0
+	}
+	f.next = max(1, f.run*2)
+	return f.run
+}
+
+// recovered records a successful poll and returns how many polls the run of
+// failures it ended cost, or zero when nothing was wrong.
+func (f *failureLog) recovered() int {
+	run := f.run
+	f.run, f.next = 0, 0
+	return run
 }
 
 // poll reads the session and renames every tab whose title no longer fits.

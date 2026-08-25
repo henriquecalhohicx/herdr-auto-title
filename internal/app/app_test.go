@@ -35,8 +35,14 @@ type harness struct {
 
 func start(t *testing.T, tabs []herdr.TabInfo, panes []herdr.PaneInfo) *harness {
 	t.Helper()
+	return startWith(t, herdr.NewStub(tabs, panes))
+}
 
-	client := herdr.NewStub(tabs, panes)
+// startWith runs an App against a stub the test has already prepared, which is
+// how a test arranges for the very first poll to fail.
+func startWith(t *testing.T, client *herdr.StubClient) *harness {
+	t.Helper()
+
 	app := New(testConfig(), discardLogger(), resolver.Default(resolver.DefaultMaxLength, resolver.DefaultBranchMaxLength))
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -244,15 +250,52 @@ func TestAFailedPollDoesNotStopTheLoop(t *testing.T) {
 	}
 }
 
-func TestAnUnreachableSocketStopsTheRun(t *testing.T) {
-	// The very first poll is different: with nothing read, there is nothing to
-	// keep running for, and the caller decides what to do about it.
-	client := herdr.NewStub(nil, nil)
+func TestAFailingFirstPollDoesNotStopTheRun(t *testing.T) {
+	// Herdr's socket can be a moment behind the plugin it launched, and a
+	// plugin that gives up stays dead: the startup hook is a one-shot launch,
+	// not a supervised daemon. So the first poll is treated like every other.
+	client := herdr.NewStub(
+		[]herdr.TabInfo{{TabID: "wE:t1", Label: "1"}},
+		[]herdr.PaneInfo{{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true}},
+	)
 	client.SetCallError(errors.New("no such socket"))
+	h := startWith(t, client)
 
-	app := New(testConfig(), discardLogger(), resolver.Default(resolver.DefaultMaxLength, resolver.DefaultBranchMaxLength))
-	if err := app.Run(context.Background(), client); err == nil {
-		t.Error("Run succeeded despite an unreachable socket")
+	// Long enough for several ticks to have found the socket still shut.
+	time.Sleep(10 * testPoll)
+	client.SetCallError(nil)
+
+	if got := h.awaitRenames(1)[0].Label; got != "dashboard" {
+		t.Errorf("rename = %q, want dashboard once the session answered", got)
+	}
+}
+
+func TestARunOfFailuresIsLoggedOnABackoff(t *testing.T) {
+	// Polls run twice a second, so an hour of Herdr being down is seven
+	// thousand identical warnings unless the run is allowed to double.
+	var failures failureLog
+
+	var logged []int
+	for range 2000 {
+		if run := failures.failed(); run > 0 {
+			logged = append(logged, run)
+		}
+	}
+	want := []int{1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024}
+	if len(logged) != len(want) {
+		t.Fatalf("logged %v, want %v", logged, want)
+	}
+	for i, run := range want {
+		if logged[i] != run {
+			t.Fatalf("logged %v, want %v", logged, want)
+		}
+	}
+
+	if run := failures.recovered(); run != 2000 {
+		t.Errorf("recovery reported %d missed polls, want 2000", run)
+	}
+	if run := failures.recovered(); run != 0 {
+		t.Errorf("recovery reported %d after nothing went wrong, want 0", run)
 	}
 }
 

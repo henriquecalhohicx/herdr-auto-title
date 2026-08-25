@@ -21,6 +21,7 @@ import (
 func stubGit(branches map[string]string) *Git {
 	g := &Git{
 		ttl:       GitTTL,
+		idle:      GitIdle,
 		timeout:   GitTimeout,
 		maxLength: DefaultBranchMaxLength,
 		entries:   make(map[string]*gitEntry),
@@ -458,5 +459,59 @@ func TestAMeaningfulTerminalTitleOutranksTheBranch(t *testing.T) {
 
 	if want := filepath.Base(repo) + " › Fix OAuth redirect"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
+	}
+}
+
+func TestTheCacheForgetsDirectoriesNothingAsksAbout(t *testing.T) {
+	// Every other thing kept between polls is rebuilt from the snapshot, which
+	// prunes it for free. This cache is keyed by directory, so it needs the
+	// pruning done for it or a long session accumulates every directory any
+	// pane has ever been in.
+	g := stubGit(map[string]string{"/work/one": "MC-1", "/work/two": "MC-2"})
+	awaitLookup(t, g, &state.PaneState{CWD: "/work/one"})
+	awaitLookup(t, g, &state.PaneState{CWD: "/work/two"})
+
+	// Age one reading as a pane that closed would: nothing asks about it any
+	// more, so nothing refreshes it.
+	g.mu.Lock()
+	g.entries["/work/one"].readAt = time.Now().Add(-2 * g.idle)
+	g.mu.Unlock()
+
+	// The next poll, which still asks about the other directory.
+	g.Resolve(&state.PaneState{CWD: "/work/two"})
+
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if _, kept := g.entries["/work/one"]; kept {
+		t.Error("a directory nothing asks about is still cached")
+	}
+	if _, kept := g.entries["/work/two"]; !kept {
+		t.Error("the directory still in use was forgotten")
+	}
+}
+
+func TestALookupStillRunningIsNotForgotten(t *testing.T) {
+	// A fresh entry has no reading yet, so its zero timestamp is older than any
+	// idle window. Dropping it would lose the lookup already on its way.
+	g := stubGit(nil)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	g.lookup = func(context.Context, string) (string, bool) {
+		close(started)
+		<-release
+		return "", false
+	}
+
+	g.Resolve(&state.PaneState{CWD: "/work/slow"})
+	<-started
+	g.Resolve(&state.PaneState{CWD: "/work/slow"})
+
+	g.mu.Lock()
+	_, kept := g.entries["/work/slow"]
+	g.mu.Unlock()
+	close(release)
+
+	if !kept {
+		t.Error("a directory whose lookup was still running was forgotten")
 	}
 }

@@ -20,6 +20,10 @@ const (
 	// GitTimeout bounds one git invocation. A repository on a stalled network
 	// mount must not leave a goroutine waiting forever.
 	GitTimeout = 2 * time.Second
+	// GitIdle is how long a reading nothing asks about is kept. A directory
+	// still in use is asked about on every poll, so ten times the TTL leaves
+	// ample room for one that is.
+	GitIdle = 10 * GitTTL
 )
 
 // DefaultBranchMaxLength bounds what a branch may contribute to a title, in
@@ -66,6 +70,7 @@ type Git struct {
 	// tests can drive every outcome without a repository on disk.
 	lookup    func(ctx context.Context, dir string) (string, bool)
 	ttl       time.Duration
+	idle      time.Duration
 	timeout   time.Duration
 	maxLength int
 
@@ -88,6 +93,7 @@ func NewGit(maxLength int) *Git {
 	return &Git{
 		lookup:    gitBranch,
 		ttl:       GitTTL,
+		idle:      GitIdle,
 		timeout:   GitTimeout,
 		maxLength: maxLength,
 		entries:   make(map[string]*gitEntry),
@@ -134,6 +140,8 @@ func (g *Git) cached(dir string) (string, bool) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
+	g.forget()
+
 	entry, known := g.entries[dir]
 	if !known {
 		entry = &gitEntry{}
@@ -145,6 +153,26 @@ func (g *Git) cached(dir string) (string, bool) {
 		go g.refresh(dir)
 	}
 	return entry.branch, entry.found
+}
+
+// forget drops readings for directories nothing is asking about. The caller
+// holds the mutex.
+//
+// Every other thing Auto Title remembers between polls is rebuilt from the
+// snapshot, which prunes it to the live session for free. This cache is keyed
+// by directory instead, so without this it grows for the life of the session,
+// one entry for every directory any pane has ever been in.
+//
+// A directory still in use is asked about on every poll, and that keeps its
+// reading fresh; one that has aged well past the TTL belongs to a pane that has
+// moved on or closed. A lookup still running is left alone — its reading has
+// not been taken yet.
+func (g *Git) forget() {
+	for dir, entry := range g.entries {
+		if !entry.inFlight && time.Since(entry.readAt) > g.idle {
+			delete(g.entries, dir)
+		}
+	}
 }
 
 func (g *Git) refresh(dir string) {

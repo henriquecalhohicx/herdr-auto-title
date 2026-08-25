@@ -292,10 +292,19 @@ The pane's working directory is the home directory or the filesystem root, which
 carry no context. Later slices add process, agent and terminal-title sources
 that name such tabs by what is running in them.
 
-**The plugin survives a Herdr restart.**
+**The plugin survives a Herdr restart, and a Herdr that is not up yet.**
 Every poll dials a fresh connection, so there is nothing to reconnect: failed
-polls are logged and the loop keeps trying. Only a failure of the very first
-poll ends the process, because there is nothing to run for.
+polls are logged and the loop keeps trying, the very first one included. Herdr
+launches a plugin through a one-shot startup hook rather than supervising it, so
+a plugin that gave up would stay dead for the session — and its socket can be a
+moment behind the process it launched.
+
+Polls keep their usual rate through an outage, because a failed dial costs
+microseconds and the rate is what makes recovery immediate. What backs off is
+the logging: the first failure is reported, then only as the run of them
+doubles, so an hour of Herdr being down costs a dozen lines rather than seven
+thousand. `the session is answering again` closes the run and says how many
+polls it cost.
 
 ## Development
 
