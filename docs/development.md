@@ -22,13 +22,13 @@ need the outer two.
 make test        # go test -race ./...
 make test-v      # the same, verbose
 make check       # fmt + vet + lint + test, run this before every commit
+```
 
 The same four run in CI on every push and pull request
 (`.github/workflows/ci.yml`), plus the Go version floor the manifest promises,
 which a laptop on the newest toolchain does not cover. Windows was tried once
 and dropped: the fixtures assume Unix paths, so `filepath.IsAbs` rejects every
 directory in them and every tab falls back to `Shell`.
-```
 
 The suite drives the whole loop through `herdr.StubClient`: the first poll, a
 tab appearing later, deduplication, rename failures, a poll that fails outright.
@@ -93,6 +93,31 @@ per active pane before anything live.
 The current list of verified facts lives in the README under *Notes on the Herdr
 socket API*, and the measurements behind the polling decision are in CLAUDE.md.
 When a probe teaches you something new, add it there.
+
+## Registering it with Herdr
+
+`make run` starts the binary from your working tree and registers nothing.
+Herdr itself knows two ways to hold a plugin, and it refuses to hold both at
+once for the same id (`herdr.auto-title`).
+
+While developing, link the checkout:
+
+```sh
+make build                                    # link runs no build command
+herdr plugin link /path/to/herdr-auto-title
+```
+
+To use the published plugin the way anyone else does:
+
+```sh
+herdr plugin unlink herdr.auto-title          # installing over a link is refused
+herdr plugin install kryptamine/herdr-auto-title
+```
+
+`unlink` only unregisters; your checkout is left alone. `install` takes GitHub
+shorthand and nothing else (`owner/repo`, or `owner/repo/subdir`), clones the
+repository, runs the build command from `herdr-plugin.toml` and registers what
+it built. `herdr plugin list` shows which of the two you are running.
 
 ## Working through a ticket
 
