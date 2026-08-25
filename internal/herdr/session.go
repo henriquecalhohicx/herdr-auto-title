@@ -68,10 +68,8 @@ type PaneProcessInfo struct {
 type Snapshot struct {
 	Workspaces []WorkspaceInfo `json:"workspaces"`
 
-	Tabs     []TabInfo  `json:"tabs"`
-	Panes    []PaneInfo `json:"panes"`
-	Protocol int        `json:"protocol"`
-	Version  string     `json:"version"`
+	Tabs  []TabInfo  `json:"tabs"`
+	Panes []PaneInfo `json:"panes"`
 }
 
 // snapshotResult wraps the snapshot in the method's result object.

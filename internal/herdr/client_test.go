@@ -200,9 +200,8 @@ func TestSessionSnapshotDecodesTheWrapper(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SessionSnapshot: %v", err)
 	}
-	if snapshot.Version != "0.8.2" || snapshot.Protocol != 20 {
-		t.Errorf("version/protocol = %q/%d, want 0.8.2/20", snapshot.Version, snapshot.Protocol)
-	}
+	// The response carries version, protocol and a tab number, none of which
+	// the wire types mirror: what nothing reads must decode to nothing.
 	if len(snapshot.Tabs) != 1 || snapshot.Tabs[0].Label != "1" {
 		t.Errorf("tabs = %+v, want one tab labelled 1", snapshot.Tabs)
 	}
