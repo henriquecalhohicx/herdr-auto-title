@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -53,55 +54,98 @@ func LoadConfig() (Config, []string) {
 	}
 	var warnings []string
 
-	if raw := os.Getenv(EnvDebug); raw != "" {
-		value, err := strconv.ParseBool(raw)
-		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("%s=%q is not a boolean, ignoring", EnvDebug, raw))
-		} else {
-			cfg.Debug = value
-		}
-	}
-
-	if raw := os.Getenv(EnvPoll); raw != "" {
-		ms, err := strconv.Atoi(raw)
-		switch {
-		case err != nil:
-			warnings = append(warnings, fmt.Sprintf("%s=%q is not a number, using %s", EnvPoll, raw, cfg.Poll))
-		case ms <= 0:
-			warnings = append(warnings, fmt.Sprintf("%s=%d must be positive, using %s", EnvPoll, ms, cfg.Poll))
-		default:
-			cfg.Poll = time.Duration(ms) * time.Millisecond
-		}
-	}
-
-	if raw := os.Getenv(EnvMaxLength); raw != "" {
-		length, err := strconv.Atoi(raw)
-		switch {
-		case err != nil:
-			warnings = append(warnings, fmt.Sprintf("%s=%q is not a number, using %d", EnvMaxLength, raw, cfg.MaxLength))
-		case length <= 0:
-			warnings = append(warnings, fmt.Sprintf("%s=%d must be positive, using %d", EnvMaxLength, length, cfg.MaxLength))
-		default:
-			cfg.MaxLength = length
-		}
-	}
-
-	if raw := os.Getenv(EnvBranchMax); raw != "" {
-		length, err := strconv.Atoi(raw)
-		switch {
-		case err != nil:
-			warnings = append(warnings, fmt.Sprintf("%s=%q is not a number, using %d", EnvBranchMax, raw, cfg.BranchMax))
-		case length < 0:
-			warnings = append(warnings, fmt.Sprintf("%s=%d cannot be negative, using %d", EnvBranchMax, length, cfg.BranchMax))
-		default:
-			// Zero is meaningful: it leaves branches out of titles.
-			cfg.BranchMax = length
-		}
-	}
-
-	if raw := os.Getenv(EnvManual); raw != "" {
-		cfg.ManualPath = raw
-	}
+	cfg.Debug = read(&warnings, EnvDebug, cfg.Debug, boolean)
+	cfg.Poll = read(&warnings, EnvPoll, cfg.Poll, milliseconds)
+	cfg.MaxLength = read(&warnings, EnvMaxLength, cfg.MaxLength, number(positive))
+	// Zero is meaningful here: it leaves branches out of titles.
+	cfg.BranchMax = read(&warnings, EnvBranchMax, cfg.BranchMax, number(nonNegative))
+	cfg.ManualPath = read(&warnings, EnvManual, cfg.ManualPath, text)
 
 	return cfg, warnings
+}
+
+// read returns what the environment says name is, or fallback when it says
+// nothing usable.
+//
+// Nothing here fails. A variable that cannot be used is reported and the
+// default is kept, so a typo in a shell profile never stops the plugin from
+// starting — which is why this appends a warning rather than returning an
+// error, and why it is the only place a warning is worded.
+func read[T any](warnings *[]string, name string, fallback T, convert converter[T]) T {
+	raw := os.Getenv(name)
+	if raw == "" {
+		return fallback
+	}
+	value, err := convert(raw)
+	if err != nil {
+		*warnings = append(*warnings, fmt.Sprintf("%s=%q %s, using %v", name, raw, err, fallback))
+		return fallback
+	}
+	return value
+}
+
+// converter turns the raw text of a variable into a value, or says what is
+// wrong with it.
+type converter[T any] func(raw string) (T, error)
+
+// validator says what is wrong with a number, or nothing when it is usable.
+// It is separate from parsing because the two limits differ only in this.
+type validator func(value int) error
+
+// The reasons a variable is rejected. Each reads as the middle of the warning
+// it lands in: `HERDR_AUTO_TITLE_POLL_MS="0" must be positive, using 500ms`.
+var (
+	errNotBoolean  = errors.New("is not a boolean")
+	errNotNumber   = errors.New("is not a number")
+	errNotPositive = errors.New("must be positive")
+	errNegative    = errors.New("cannot be negative")
+)
+
+// positive rejects zero, for the settings where it would stop the plugin doing
+// anything: a poll interval of zero spins, and a title of no length is no title.
+func positive(value int) error {
+	if value <= 0 {
+		return errNotPositive
+	}
+	return nil
+}
+
+// nonNegative allows zero, for the settings where it means "none of this".
+func nonNegative(value int) error {
+	if value < 0 {
+		return errNegative
+	}
+	return nil
+}
+
+// text accepts whatever it is given: any string is a usable path.
+func text(raw string) (string, error) { return raw, nil }
+
+func boolean(raw string) (bool, error) {
+	value, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false, errNotBoolean
+	}
+	return value, nil
+}
+
+// number reads a count and holds it to valid.
+func number(valid validator) converter[int] {
+	return func(raw string) (int, error) {
+		value, err := strconv.Atoi(raw)
+		if err != nil {
+			return 0, errNotNumber
+		}
+		return value, valid(value)
+	}
+}
+
+// milliseconds reads a duration written as a count of them, which is easier to
+// pass through a shell than "500ms".
+func milliseconds(raw string) (time.Duration, error) {
+	value, err := number(positive)(raw)
+	if err != nil {
+		return 0, err
+	}
+	return time.Duration(value) * time.Millisecond, nil
 }
