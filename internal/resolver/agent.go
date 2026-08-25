@@ -20,6 +20,9 @@ func (Agent) Name() string    { return "agent" }
 func (Agent) Confidence() int { return ConfidenceAgent }
 
 func (Agent) Resolve(pane *state.PaneState) (Parts, bool) {
+	if pane == nil {
+		return Parts{}, false
+	}
 	if !pane.HasAgent() {
 		return Parts{}, false
 	}

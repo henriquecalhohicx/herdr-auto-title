@@ -45,7 +45,8 @@ type Source interface {
 	// what it reads, not for what it happened to find this time.
 	Confidence() int
 	// Resolve reports the parts this source derives, or false when the pane
-	// carries nothing this source recognizes.
+	// carries nothing this source recognizes. A nil pane is a tab with no
+	// panes at all, and every source declines it rather than panicking.
 	Resolve(pane *state.PaneState) (Parts, bool)
 }
 
