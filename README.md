@@ -97,6 +97,10 @@ field is filled by the highest-priority source that supplies it, so a
 lower-priority source can complete a title without overriding a higher-priority
 one.
 
+Each source states its own place on this ladder, and the resolver orders itself
+by them — the table below is read from the code rather than kept in step with it
+by hand.
+
 | Priority | Source | Status |
 |---------:|--------|--------|
 | 1 | Manual rename protection | later slice |

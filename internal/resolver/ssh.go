@@ -38,7 +38,7 @@ var sshFlagsWithValue = map[byte]struct{}{
 // any other, and both describe the remote — but neither says which machine, and
 // that is the thing a tab full of identical-looking shells needs to say. The
 // host becomes the context, marked as remote: `ssh › prod-01`, and
-// `ssh › prod-01 · Restart the queue workers` once the remote shell has
+// `ssh › prod-01 › Restart the queue workers` once the remote shell has
 // something to report.
 //
 // The user is deliberately dropped: `root@prod-01` and `deploy@prod-01` are the
@@ -47,7 +47,8 @@ type SSH struct{}
 
 var _ Source = SSH{}
 
-func (SSH) Name() string { return "ssh" }
+func (SSH) Name() string    { return "ssh" }
+func (SSH) Confidence() int { return ConfidenceSSH }
 
 func (SSH) Resolve(pane *state.PaneState) (Parts, bool) {
 	if pane == nil {
@@ -64,9 +65,9 @@ func (SSH) Resolve(pane *state.PaneState) (Parts, bool) {
 	// to go in the activity instead.
 	host := Sanitize(sshHost(args), 0)
 	if host == "" {
-		return Parts{Activity: SSHActivity, Confidence: ConfidenceSSH}, true
+		return Parts{Activity: SSHActivity}, true
 	}
-	return Parts{Context: qualify(host, sshKind), Confidence: ConfidenceSSH}, true
+	return Parts{Context: qualify(host, sshKind)}, true
 }
 
 // sshArgs finds an ssh process in the pane and returns its arguments.

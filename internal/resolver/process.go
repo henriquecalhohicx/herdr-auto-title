@@ -104,13 +104,14 @@ func stripKind(detail, kind string) string {
 // what that program is doing.
 //
 // It is the bare half of what the terminal title contributes: a tab holding an
-// editor with no file open still reads `dashboard · nvim`, which says more than
+// editor with no file open still reads `dashboard › nvim`, which says more than
 // the directory alone.
 type Process struct{}
 
 var _ Source = Process{}
 
-func (Process) Name() string { return "process" }
+func (Process) Name() string    { return "process" }
+func (Process) Confidence() int { return ConfidenceProcess }
 
 func (Process) Resolve(pane *state.PaneState) (Parts, bool) {
 	if pane == nil {
@@ -120,5 +121,5 @@ func (Process) Resolve(pane *state.PaneState) (Parts, bool) {
 	if kind == "" {
 		return Parts{}, false
 	}
-	return Parts{Activity: kind, Confidence: ConfidenceProcess}, true
+	return Parts{Activity: kind}, true
 }

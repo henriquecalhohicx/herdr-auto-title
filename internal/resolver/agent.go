@@ -11,7 +11,7 @@ import (
 // It outranks every other source: when an agent reports a title, that title is
 // the most direct statement of what the tab is for that Auto Title will ever
 // see. The agent supplies no context, so the working directory still completes
-// the name into `<context> · <activity>`.
+// the name into `<context> › <activity>`.
 //
 // Many agents report no title at all and express the same thing through the
 // terminal title instead; those panes fall through to TerminalTitle, which is
@@ -21,7 +21,8 @@ type Agent struct{}
 
 var _ Source = Agent{}
 
-func (Agent) Name() string { return "agent" }
+func (Agent) Name() string    { return "agent" }
+func (Agent) Confidence() int { return ConfidenceAgent }
 
 func (Agent) Resolve(pane *state.PaneState) (Parts, bool) {
 	if !pane.HasAgent() {
@@ -40,5 +41,5 @@ func (Agent) Resolve(pane *state.PaneState) (Parts, bool) {
 	if strings.EqualFold(activity, pane.Agent) || strings.EqualFold(activity, pane.DisplayAgent) {
 		return Parts{}, false
 	}
-	return Parts{Activity: qualify(activity, paneKind(pane)), Confidence: ConfidenceAgent}, true
+	return Parts{Activity: qualify(activity, paneKind(pane))}, true
 }

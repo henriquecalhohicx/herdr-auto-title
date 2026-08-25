@@ -92,7 +92,8 @@ func NewGit(maxLength int) *Git {
 	}
 }
 
-func (*Git) Name() string { return "git" }
+func (*Git) Name() string    { return "git" }
+func (*Git) Confidence() int { return ConfidenceGit }
 
 func (g *Git) Resolve(pane *state.PaneState) (Parts, bool) {
 	if pane == nil || g.maxLength <= 0 {
@@ -118,7 +119,7 @@ func (g *Git) Resolve(pane *state.PaneState) (Parts, bool) {
 	if activity == "" {
 		return Parts{}, false
 	}
-	return Parts{Activity: activity, Confidence: ConfidenceGit}, true
+	return Parts{Activity: activity}, true
 }
 
 // cached returns the branch known for a directory, refreshing it in the

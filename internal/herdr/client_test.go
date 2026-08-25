@@ -219,7 +219,7 @@ func TestSessionSnapshotDecodesTheWrapper(t *testing.T) {
 func TestRenameTabSendsTabAndLabel(t *testing.T) {
 	srv := newTestServer(t, respondOK)
 
-	if err := RenameTab(context.Background(), srv.client(), "wE:t1", "dashboard · Tests"); err != nil {
+	if err := RenameTab(context.Background(), srv.client(), "wE:t1", "dashboard › Tests"); err != nil {
 		t.Fatalf("RenameTab: %v", err)
 	}
 
@@ -231,8 +231,8 @@ func TestRenameTabSendsTabAndLabel(t *testing.T) {
 	if err := json.Unmarshal(seen[0].Params, &params); err != nil {
 		t.Fatalf("decode params: %v", err)
 	}
-	if params.TabID != "wE:t1" || params.Label != "dashboard · Tests" {
-		t.Errorf("params = %+v, want {wE:t1 dashboard · Tests}", params)
+	if params.TabID != "wE:t1" || params.Label != "dashboard › Tests" {
+		t.Errorf("params = %+v, want {wE:t1 dashboard › Tests}", params)
 	}
 }
 

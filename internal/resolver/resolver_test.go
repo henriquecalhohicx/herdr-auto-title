@@ -105,20 +105,22 @@ func TestResolveIsDeterministic(t *testing.T) {
 	}
 }
 
-// higherSource stands in for the sources later slices add above CWD.
+// higherSource stands in for a source ranking above CWD.
 type higherSource struct {
-	parts Parts
-	ok    bool
+	confidence int
+	parts      Parts
+	ok         bool
 }
 
-func (higherSource) Name() string { return "test_source" }
+func (higherSource) Name() string      { return "test_source" }
+func (s higherSource) Confidence() int { return s.confidence }
 func (s higherSource) Resolve(*state.PaneState) (Parts, bool) {
 	return s.parts, s.ok
 }
 
 func TestHigherPrioritySourceSuppliesActivity(t *testing.T) {
 	r := New(DefaultMaxLength,
-		higherSource{parts: Parts{Activity: "Tests", Confidence: ConfidenceProcess}, ok: true},
+		higherSource{confidence: ConfidenceProcess, parts: Parts{Activity: "Tests"}, ok: true},
 		NewCWD(),
 	)
 
@@ -133,7 +135,7 @@ func TestHigherPrioritySourceSuppliesActivity(t *testing.T) {
 
 func TestHigherPrioritySourceOverridesContext(t *testing.T) {
 	r := New(DefaultMaxLength,
-		higherSource{parts: Parts{Context: "prod-01", Activity: "SSH", Confidence: ConfidenceSSH}, ok: true},
+		higherSource{confidence: ConfidenceSSH, parts: Parts{Context: "prod-01", Activity: "SSH"}, ok: true},
 		NewCWD(),
 	)
 
@@ -207,5 +209,53 @@ func TestAWorkspaceWithoutAName(t *testing.T) {
 	got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(context.Background(), tab)
 	if want := "dashboard › Fix OAuth redirect"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
+	}
+}
+
+func TestTheShippedChainIsAWellFormedLadder(t *testing.T) {
+	// Confidences used to be repeated in every result a source returned, and
+	// the chain's order was a second, unchecked statement of the same ladder.
+	// Now the numbers are the only statement, so they have to hold up.
+	chain := Default(DefaultMaxLength, DefaultBranchMaxLength)
+
+	seen := make(map[int]string, len(chain.sources))
+	previous := 0
+	for i, source := range chain.sources {
+		confidence := source.Confidence()
+
+		if other, taken := seen[confidence]; taken {
+			t.Errorf("%s and %s both sit at %d; the ladder has no room for ties",
+				source.Name(), other, confidence)
+		}
+		seen[confidence] = source.Name()
+
+		if confidence <= ConfidenceFallback {
+			t.Errorf("%s at %d ranks no higher than the generic fallback", source.Name(), confidence)
+		}
+		if i > 0 && confidence >= previous {
+			t.Errorf("%s at %d is not below the source before it at %d",
+				source.Name(), confidence, previous)
+		}
+		previous = confidence
+	}
+}
+
+func TestSourcesAreOrderedByConfidenceNotByArgument(t *testing.T) {
+	// Listing a source out of ladder order must not change what wins.
+	low := higherSource{confidence: ConfidenceCWD, parts: Parts{Activity: "low"}, ok: true}
+	high := higherSource{confidence: ConfidenceAgent, parts: Parts{Activity: "high"}, ok: true}
+
+	tab := tabWithPane(&state.PaneState{})
+	for _, chain := range []*Deterministic{
+		New(DefaultMaxLength, high, low),
+		New(DefaultMaxLength, low, high),
+	} {
+		got := chain.Resolve(context.Background(), tab)
+		if got.Name != "high" {
+			t.Errorf("name = %q, want high", got.Name)
+		}
+		if got.Confidence != ConfidenceAgent {
+			t.Errorf("confidence = %d, want %d", got.Confidence, ConfidenceAgent)
+		}
 	}
 }

@@ -6,6 +6,7 @@ package resolver
 
 import (
 	"context"
+	"sort"
 	"strings"
 
 	"herdr-auto-title/internal/state"
@@ -17,9 +18,15 @@ const DefaultMaxLength = 64
 // GenericFallback names a tab whose context tells us nothing.
 const GenericFallback = "Shell"
 
-// Confidence levels form the resolution ladder. Higher-priority sources carry
-// higher confidence, and a source never overrides a field a higher-priority
-// source already supplied.
+// Confidence levels form the resolution ladder. Each source returns its own
+// through Source.Confidence, and the resolver orders itself by them, so the
+// ladder is stated once rather than being implied a second time by the order
+// sources happen to be listed in. A source never overrides a field a
+// higher-priority source already supplied.
+//
+// They live in one block because the numbering is shared: a source's place is
+// only meaningful relative to the others, and a gap left free here is what
+// makes room for the next one.
 const (
 	ConfidenceFallback      = 10
 	ConfidenceCWD           = 30
@@ -31,17 +38,20 @@ const (
 )
 
 // Parts are the components a source contributes to a title, formatted as
-// "<context> · <activity>". A source may supply either or both.
+// "<context> › <activity>". A source may supply either or both.
 type Parts struct {
-	Context    string
-	Activity   string
-	Confidence int
+	Context  string
+	Activity string
 }
 
 // Source contributes title parts from a pane's context.
 type Source interface {
 	// Name identifies the source in the rename reason.
 	Name() string
+	// Confidence is the source's place on the resolution ladder. It belongs to
+	// the source rather than to each result it returns: a source is trusted for
+	// what it reads, not for what it happened to find this time.
+	Confidence() int
 	// Resolve reports the parts this source derives, or false when the pane
 	// carries nothing this source recognizes.
 	Resolve(pane *state.PaneState) (Parts, bool)
@@ -67,17 +77,27 @@ type Deterministic struct {
 
 var _ TitleResolver = (*Deterministic)(nil)
 
-// New builds a resolver from sources given in priority order, highest first.
+// New builds a resolver from sources, ordering them by confidence.
+//
+// The order is derived rather than trusted. Listing sources out of ladder order
+// used to leave the numbers saying one thing and the behaviour doing another,
+// with nothing to catch it; now the numbers decide. Equal confidences keep the
+// order they were given.
 func New(maxLength int, sources ...Source) *Deterministic {
 	if maxLength <= 0 {
 		maxLength = DefaultMaxLength
 	}
-	return &Deterministic{sources: sources, maxLength: maxLength}
+	ordered := append([]Source(nil), sources...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		return ordered[i].Confidence() > ordered[j].Confidence()
+	})
+	return &Deterministic{sources: ordered, maxLength: maxLength}
 }
 
-// Default builds the resolver Auto Title ships with: every source in priority
-// order, highest first. Later tickets add their sources here, so the binary and
-// the tests can never drift apart on what the chain contains.
+// Default builds the resolver Auto Title ships with: every source there is.
+// Later tickets add their sources here, so the binary and the tests can never
+// drift apart on what the chain contains. The order below is the ladder's, but
+// only for reading — New sorts by confidence regardless.
 //
 // branchMax bounds what a git branch may contribute; zero leaves branches out.
 func Default(maxLength, branchMax int) *Deterministic {
@@ -111,13 +131,13 @@ func (d *Deterministic) Resolve(_ context.Context, tab state.TabState) Decision 
 		if parts.Activity == "" && got.Activity != "" {
 			parts.Activity = got.Activity
 			reason = source.Name()
-			confidence = got.Confidence
+			confidence = source.Confidence()
 		}
 		if parts.Context == "" && got.Context != "" {
 			parts.Context = got.Context
 			if reason == "" {
 				reason = source.Name()
-				confidence = got.Confidence
+				confidence = source.Confidence()
 			}
 		}
 		if parts.Context != "" && parts.Activity != "" {
@@ -126,7 +146,7 @@ func (d *Deterministic) Resolve(_ context.Context, tab state.TabState) Decision 
 	}
 
 	// A shell that titles its window after the directory would otherwise
-	// produce "dashboard · dashboard".
+	// produce "dashboard › dashboard".
 	if strings.EqualFold(parts.Activity, parts.Context) {
 		parts.Activity = ""
 	}

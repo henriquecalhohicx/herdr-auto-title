@@ -411,6 +411,22 @@ type RenameDecision struct {
 }
 ```
 
+Each source states its own place on the ladder, and the resolver orders itself
+by them:
+
+```go
+type Source interface {
+    Name() string
+    Confidence() int
+    Resolve(pane *PaneState) (Parts, bool)
+}
+```
+
+The confidence belongs to the source rather than to each result it returns: a
+source is trusted for what it reads, not for what it happened to find this time.
+Deriving the order from it leaves one statement of the ladder instead of two
+that can disagree.
+
 The resolver must be deterministic.
 
 Identical input state must produce identical output.

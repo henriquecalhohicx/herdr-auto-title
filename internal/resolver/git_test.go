@@ -79,8 +79,8 @@ func TestBranchBecomesTheActivity(t *testing.T) {
 	if parts.Context != "" {
 		t.Errorf("context = %q, want the directory source to supply it", parts.Context)
 	}
-	if parts.Confidence != ConfidenceGit {
-		t.Errorf("confidence = %d, want %d", parts.Confidence, ConfidenceGit)
+	if got := (&Git{}).Confidence(); got != ConfidenceGit {
+		t.Errorf("confidence = %d, want %d", got, ConfidenceGit)
 	}
 }
 

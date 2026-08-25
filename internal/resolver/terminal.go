@@ -7,7 +7,7 @@ import "herdr-auto-title/internal/state"
 // It outranks the working directory: a title a program went out of its way to
 // set usually says what is happening, while the directory only says where. It
 // contributes an activity and no context, so a meaningful title combines with
-// the directory into `<context> · <activity>`.
+// the directory into `<context> › <activity>`.
 //
 // When the pane names a single program, that program qualifies the title:
 // `nvim:auth.provider.ts` rather than `auth.provider.ts - Nvim`. The program is
@@ -17,7 +17,8 @@ type TerminalTitle struct{}
 
 var _ Source = TerminalTitle{}
 
-func (TerminalTitle) Name() string { return "terminal_title" }
+func (TerminalTitle) Name() string    { return "terminal_title" }
+func (TerminalTitle) Confidence() int { return ConfidenceTerminalTitle }
 
 func (TerminalTitle) Resolve(pane *state.PaneState) (Parts, bool) {
 	if pane == nil {
@@ -37,8 +38,5 @@ func (TerminalTitle) Resolve(pane *state.PaneState) (Parts, bool) {
 		return Parts{}, false
 	}
 
-	return Parts{
-		Activity:   qualify(activity, paneKind(pane)),
-		Confidence: ConfidenceTerminalTitle,
-	}, true
+	return Parts{Activity: qualify(activity, paneKind(pane))}, true
 }

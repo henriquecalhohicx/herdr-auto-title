@@ -28,7 +28,8 @@ func NewCWD() CWD {
 	return CWD{home: filepath.Clean(home)}
 }
 
-func (CWD) Name() string { return "cwd" }
+func (CWD) Name() string    { return "cwd" }
+func (CWD) Confidence() int { return ConfidenceCWD }
 
 func (c CWD) Resolve(pane *state.PaneState) (Parts, bool) {
 	if pane == nil {
@@ -46,7 +47,7 @@ func (c CWD) Resolve(pane *state.PaneState) (Parts, bool) {
 	if name == "" {
 		return Parts{}, false
 	}
-	return Parts{Context: name, Confidence: ConfidenceCWD}, true
+	return Parts{Context: name}, true
 }
 
 // base returns the meaningful basename of dir, or "" when the path carries no
