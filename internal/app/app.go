@@ -22,6 +22,7 @@ type App struct {
 	log     *slog.Logger
 	titles  resolver.TitleResolver
 	changes *state.Changes
+	manual  *state.Manual
 }
 
 // New builds the application. The connection is supplied to Run, so the same
@@ -32,6 +33,7 @@ func New(cfg Config, log *slog.Logger, titles resolver.TitleResolver) *App {
 		log:     log,
 		titles:  titles,
 		changes: state.NewChanges(),
+		manual:  state.LoadManual(cfg.ManualPath),
 	}
 }
 
@@ -83,12 +85,22 @@ func (a *App) poll(ctx context.Context, client herdr.Client) error {
 	}
 	a.changes.Observe(snapshot.Panes)
 
-	for _, tab := range a.tabsIn(ctx, client, snapshot) {
+	tabs := a.tabsIn(ctx, client, snapshot)
+	a.manual.Retain(labelsOf(tabs))
+
+	for _, tab := range tabs {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+		if a.manual.Locked(tab.ID) {
+			continue
+		}
 
 		decision := a.titles.Resolve(ctx, tab)
+		if a.manual.Observe(tab.ID, tab.CurrentName, decision.Name) {
+			a.log.Info("leaving a tab the user renamed", "tab_id", tab.ID, "name", tab.CurrentName)
+			continue
+		}
 		if decision.Name == "" || decision.Name == tab.CurrentName {
 			continue
 		}
@@ -104,6 +116,9 @@ func (a *App) poll(ctx context.Context, client herdr.Client) error {
 			continue
 		}
 
+		// Recorded before the log line so the next poll cannot read this
+		// rename as the user's.
+		a.manual.Applied(tab.ID, decision.Name)
 		a.log.Info("tab renamed",
 			"tab_id", tab.ID,
 			"old", tab.CurrentName,
@@ -113,6 +128,16 @@ func (a *App) poll(ctx context.Context, client herdr.Client) error {
 		)
 	}
 	return nil
+}
+
+// labelsOf indexes tabs by id for the manual-name bookkeeping, which needs both
+// halves: an id that is gone, and a label that has moved on.
+func labelsOf(tabs []state.TabState) map[string]string {
+	labels := make(map[string]string, len(tabs))
+	for _, tab := range tabs {
+		labels[tab.ID] = tab.CurrentName
+	}
+	return labels
 }
 
 // tabsIn assembles the snapshot's tabs, each with the panes it holds.

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"herdr-auto-title/internal/resolver"
+	"herdr-auto-title/internal/state"
 )
 
 // Environment variables Auto Title reads. V1 has no configuration file.
@@ -15,6 +16,7 @@ const (
 	EnvPoll      = "HERDR_AUTO_TITLE_POLL_MS"
 	EnvMaxLength = "HERDR_AUTO_TITLE_MAX_LENGTH"
 	EnvBranchMax = "HERDR_AUTO_TITLE_BRANCH_MAX"
+	EnvManual    = "HERDR_AUTO_TITLE_MANUAL_FILE"
 )
 
 // DefaultPoll is how often the session is read.
@@ -32,6 +34,9 @@ type Config struct {
 	// BranchMax bounds what a git branch may add to a title. Zero leaves
 	// branches out of titles entirely.
 	BranchMax int
+	// ManualPath is where tabs the user renamed by hand are remembered across
+	// restarts. Empty keeps them in memory only.
+	ManualPath string
 }
 
 // LoadConfig reads configuration from the environment. Unusable values are
@@ -39,9 +44,10 @@ type Config struct {
 // plugin from running.
 func LoadConfig() (Config, []string) {
 	cfg := Config{
-		Poll:      DefaultPoll,
-		MaxLength: resolver.DefaultMaxLength,
-		BranchMax: resolver.DefaultBranchMaxLength,
+		Poll:       DefaultPoll,
+		MaxLength:  resolver.DefaultMaxLength,
+		BranchMax:  resolver.DefaultBranchMaxLength,
+		ManualPath: state.DefaultManualPath(),
 	}
 	var warnings []string
 
@@ -89,6 +95,10 @@ func LoadConfig() (Config, []string) {
 			// Zero is meaningful: it leaves branches out of titles.
 			cfg.BranchMax = length
 		}
+	}
+
+	if raw := os.Getenv(EnvManual); raw != "" {
+		cfg.ManualPath = raw
 	}
 
 	return cfg, warnings

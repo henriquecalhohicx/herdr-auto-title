@@ -86,6 +86,13 @@ There is no scrollback scanning and no LLM.
   like; lowering it makes renames land sooner.
 - **Resolver.** Deterministic — identical state always yields an identical
   title. Every candidate value is treated as untrusted input.
+- **Your renames win.** A label that moved between two polls and is not what the
+  resolver would produce was put there by you, and the tab is left alone from
+  then on. Both halves matter: a label that has not moved is nobody's doing, and
+  one that matches what Auto Title would set is indistinguishable from its own
+  work. The first poll of a tab never locks it — every tab starts out carrying a
+  label that is not yet the right one, so locking on that would claim the whole
+  session at startup.
 - **Deduplication.** The snapshot reports each tab's current label, and a rename
   is skipped when the resolved title already equals it. This is what keeps the
   loop quiet, and what stops a rename from provoking the next one.
@@ -103,7 +110,7 @@ by hand.
 
 | Priority | Source | Status |
 |---------:|--------|--------|
-| 1 | Manual rename protection | later slice |
+| 1 | Manual rename protection | **implemented** |
 | 2 | Meaningful agent title | **implemented** |
 | 3 | Meaningful terminal title | **implemented** |
 | 4 | Known foreground process | **implemented** |
@@ -234,6 +241,7 @@ an unusable value is logged as a warning and the default is kept.
 | `HERDR_AUTO_TITLE_POLL_MS` | `500` | How often the session is read; also the fastest a tab can be renamed |
 | `HERDR_AUTO_TITLE_MAX_LENGTH` | `64` | Maximum title length in characters |
 | `HERDR_AUTO_TITLE_BRANCH_MAX` | `12` | Most a git branch may add to a title; `0` leaves branches out |
+| `HERDR_AUTO_TITLE_MANUAL_FILE` | `<config>/herdr-auto-title/manual-names.json` | Where tabs you renamed by hand are remembered |
 
 Auto Title logs to stderr through `log/slog`. Raw terminal output and command
 arguments are never logged.
@@ -256,9 +264,15 @@ Expected: the tab follows the editor's title, which follows the buffer. Raise
 tab can change name.
 
 **A tab keeps the name I gave it.**
-That is intended once manual rename protection lands. In this slice Auto Title
-does not yet detect manual renames, so it will overwrite a hand-picked name on
-the next context change.
+That is the point: rename a tab yourself and Auto Title leaves it alone from
+then on. The lock is remembered in `manual-names.json`; delete the entry to hand
+the tab back.
+
+**A tab I renamed lost its name.**
+A rename made while the plugin was not running is not remembered. Herdr's tab
+ids belong to a session, so a stored lock is only trusted while the tab still
+carries the name it was locked with — otherwise a restart of Herdr would lock
+whichever unrelated tabs inherited those ids.
 
 **Everything is called `Shell`.**
 The pane's working directory is the home directory or the filesystem root, which

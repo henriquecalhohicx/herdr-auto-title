@@ -372,3 +372,67 @@ func TestAWorkspaceNameIsNotRepeatedInItsTabs(t *testing.T) {
 		t.Errorf("rename = %q, want %q", got, "Fix OAuth redirect")
 	}
 }
+
+func TestARenameByTheUserTurnsAutomaticNamingOff(t *testing.T) {
+	h := start(t,
+		[]herdr.TabInfo{{TabID: "wE:t1", Label: "1"}},
+		[]herdr.PaneInfo{{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true}},
+	)
+	h.awaitRenames(1)
+
+	h.client.SetTab(herdr.TabInfo{TabID: "wE:t1", Label: "Important work"})
+	h.awaitPolls(h.client.Polls() + 3)
+
+	// The context moves on; the tab does not.
+	h.client.SetPane(herdr.PaneInfo{
+		PaneID: "wE:p1", TabID: "wE:t1", Focused: true, Revision: 2,
+		CWD: "/Users/dev/work/api",
+	})
+	h.awaitPolls(h.client.Polls() + 3)
+
+	if renames := h.client.Renames(); len(renames) != 1 {
+		t.Errorf("issued %v, want only the one before the user took the tab", renames)
+	}
+}
+
+func TestThePluginsOwnRenamesDoNotLockTheTab(t *testing.T) {
+	// Every rename changes a label the plugin then sees again. Reading its own
+	// work as the user's would stop it naming anything after the first time.
+	h := start(t,
+		[]herdr.TabInfo{{TabID: "wE:t1", Label: "1"}},
+		[]herdr.PaneInfo{{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true}},
+	)
+	h.awaitRenames(1)
+
+	for i, dir := range []string{"api", "billing", "dashboard"} {
+		h.client.SetPane(herdr.PaneInfo{
+			PaneID: "wE:p1", TabID: "wE:t1", Focused: true, Revision: uint64(i + 2),
+			CWD: "/Users/dev/work/" + dir,
+		})
+		renames := h.awaitRenames(i + 2)
+		if got := renames[len(renames)-1].Label; got != dir {
+			t.Fatalf("rename = %q, want %q", got, dir)
+		}
+	}
+}
+
+func TestNoTabIsLockedOnTheFirstPoll(t *testing.T) {
+	// Every tab starts out carrying a label that is not what the resolver
+	// would produce. Locking on that would claim the session at startup.
+	h := start(t,
+		[]herdr.TabInfo{
+			{TabID: "wE:t1", Label: "1"},
+			{TabID: "wE:t2", Label: "2"},
+		},
+		[]herdr.PaneInfo{
+			{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true},
+			{PaneID: "wE:p2", TabID: "wE:t2", CWD: "/Users/dev/work/api", Focused: true},
+		},
+	)
+
+	renames := h.awaitRenames(2)
+	labels := map[string]bool{renames[0].Label: true, renames[1].Label: true}
+	if !labels["dashboard"] || !labels["api"] {
+		t.Errorf("renames = %v, want both tabs named", renames)
+	}
+}
