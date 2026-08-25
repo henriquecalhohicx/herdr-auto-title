@@ -203,9 +203,8 @@ func (a *App) processesIn(ctx context.Context, client herdr.Client, paneID strin
 }
 
 // checkoutIn reports what the repository holding the pane has checked out.
-// Unlike a process read this is not cached: it is two small file reads at
-// 0.038 ms against a snapshot's 0.47 ms, so a fresh answer costs less than
-// remembering a stale one — see docs/architecture/title-resolution.md.
+// Unlike a process read it is not cached, and why not is in
+// docs/architecture/title-resolution.md.
 func checkoutIn(pane herdr.PaneInfo) git.Checkout {
 	// The shell's own directory, for the same reason the CWD source prefers it:
 	// it names the project more stably than whatever is running right now.

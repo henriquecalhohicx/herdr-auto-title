@@ -9,36 +9,23 @@ import (
 	"github.com/kryptamine/herdr-auto-title/internal/state"
 )
 
-// DefaultBranchMaxLength bounds what a branch may contribute to a title, in
-// columns of the tab bar.
-//
-// Twelve columns hold a tracker key, or a short word and part of the next, and
-// leave a tab readable beside a dozen others. Real branch names run far past
-// it: the ones this was calibrated against averaged fifty characters and
-// reached sixty-two.
+// DefaultBranchMaxLength bounds what a branch adds to a title, in columns of
+// the tab bar. Twelve holds a tracker key, or a word and part of the next —
+// see docs/architecture/title-resolution.md.
 const DefaultBranchMaxLength = 12
 
-// trackerKey matches an issue key such as MC-13675 or ABC-42.
-//
-// It is the one part of a branch name that identifies the work, and it survives
-// every naming convention: whether a team writes `feature/MC-13675`,
-// `bugfix-alex-the-thing-mc-13675` or `MC-13675`, the key is in there
-// somewhere. Two to six letters followed by at least two digits keeps it clear
-// of ordinary hyphenated words and of version-like fragments such as `utf-8`.
+// trackerKey matches an issue key such as MC-13675. Two to six letters and at
+// least two digits keeps it clear of hyphenated words and of fragments like
+// `utf-8`.
 var trackerKey = regexp.MustCompile(`(?i)\b[a-z]{2,6}-\d{2,6}\b`)
 
 // branchSeparators are the characters branch names are built out of. Cutting a
 // long branch at one of them ends it on a whole word.
 const branchSeparators = "-_./ "
 
-// Git names the branch the pane's repository has checked out.
-//
-// It contributes to the **context**, beside the directory, rather than to the
-// activity: a branch says which slice of a project a tab is on, which is part
-// of where the user is and not of what they are doing. That is also what makes
-// it useful — the activity is contested by the terminal title, and a branch
-// filed there spoke only for a plain shell. See docs/architecture/
-// title-resolution.md.
+// Git names the branch the pane's repository has checked out. It qualifies the
+// context rather than the activity, and why that matters is in
+// docs/architecture/title-resolution.md.
 type Git struct {
 	maxLength int
 }
@@ -86,20 +73,9 @@ func branchLabel(checkout git.Checkout, maxLength int) string {
 	return shortenBranch(Sanitize(checkout.Branch, 0), maxLength)
 }
 
-// shortenBranch reduces a branch name to the part worth putting in a tab title.
-//
-// Branch conventions vary too much to enumerate, so nothing here is a list of
-// known prefixes — a list only ever fits the team it was written for. Two rules
-// cover every convention seen:
-//
-//   - An issue key wins outright. It identifies the work, it is short, and it
-//     survives whatever the convention wraps around it. A team whose branches
-//     all begin `bugfix-<author>-` gets eight characters that distinguish
-//     instead of eight that do not.
-//   - A name that already fits is left alone: dropping `feat/` from a branch
-//     with room to spare would throw away what distinguishes it from `fix/`.
-//   - Otherwise drop the namespace, which every branch in the repository
-//     carries alike, and cut at a separator so the result ends on a whole word.
+// shortenBranch reduces an over-long branch name to the part worth a tab's
+// width. The rules, and why none of them is a list of known prefixes, are in
+// docs/architecture/title-resolution.md.
 func shortenBranch(branch string, maxLength int) string {
 	branch = strings.Trim(branch, branchSeparators)
 	if branch == "" || maxLength <= 0 {

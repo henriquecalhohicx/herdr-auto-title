@@ -1,7 +1,6 @@
-// Package git reads what a repository has checked out by reading the files
-// under .git directly. It never runs the git executable: reading HEAD costs
-// 0.038 ms where `git rev-parse` costs 12 ms, and a pane's directory is a
-// terminal-derived value that is better not handed to a subprocess at all.
+// Package git reads what a repository has checked out from the files under
+// .git, never by running git. The measurements that settled that are in
+// docs/architecture/title-resolution.md.
 package git
 
 import (

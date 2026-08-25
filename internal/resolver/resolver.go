@@ -142,9 +142,8 @@ func (d *Deterministic) collect(pane *state.PaneState) collected {
 // take fills whatever this source supplies and nothing already has.
 func (c *collected) take(source Source, parts Parts) {
 	// The activity is what a title is about, so its source answers for the
-	// title whenever one turns up. A context is credited only while no activity
-	// has been found, and a branch is credited on the same terms: it says where
-	// the user is, not what they are doing.
+	// title whenever one turns up. A context and a branch are credited only
+	// while no activity has been found.
 	if c.parts.Activity == "" && parts.Activity != "" {
 		c.parts.Activity = parts.Activity
 		c.credit(source)
