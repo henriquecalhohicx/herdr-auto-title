@@ -139,10 +139,19 @@ listed here** (`make probe-*`, `scripts/probe.py`).
   verbatim — no error, no stripping — but the tab bar renders a single line, so
   a two-line label is not available. Herdr exposes no tab-bar height setting.
 - `PaneInfo` carries no foreground process name; that needs `pane.process_info`,
-  one request per pane at 0.11 ms — cheaper than the snapshot. Its
-  `foreground_processes` lists the pane's foreground process *and its
+  one request per pane at 0.11 ms — cheaper than the snapshot, but one per pane:
+  on an eight-pane session the reads measured 0.17 ms each against a 1.35 ms
+  snapshot, so making one every poll cost as much again as the snapshot itself.
+  Its `foreground_processes` lists the pane's foreground process *and its
   descendants*, each with `name` and a nullable `argv`.
-- Pane revisions are monotonic, which is how a poll tells which panes moved.
+- Pane revisions are monotonic, which is how a poll tells which panes drew.
+- **A revision does not track what is running in the pane.** Measured over ten
+  minutes of a live eight-pane session: the foreground processes changed nine
+  times and the revision moved with them only four. A pane running a build went
+  `env` → `node` → `esbuild` → `fish` while its revision held at 10 throughout.
+  A revision says the pane drew, which starting a command usually but not
+  always provokes, so it is a cheap hint that a process read is due and never a
+  promise that one is not.
 - **`TabInfo.number` is not the label an unnamed tab carries.** It counts every
   tab the workspace has ever held and never repeats (a six-tab workspace
   numbered 2, 9, 30, 33, 35, 36). Herdr labels an unnamed tab with its
@@ -165,8 +174,11 @@ which carries the same facts in full.
   change while you work**. Run the plugin in the foreground, never in the
   background, and check `make ps` when something behaves oddly.
 - **Decide from freshly read state.** Every poll reads the session and throws
-  the result away again. The only thing carried between polls is when each pane
-  last changed, which a snapshot cannot say.
+  the result away again. What is carried between polls is only what a snapshot
+  cannot say: when each pane last changed, and what it was running when it was
+  last asked — the latter reused only until that pane's revision moves, and for
+  no longer than `processRefresh` either way, because a revision does not track
+  what runs in a pane.
 - Never pass terminal-derived values to a shell. Renames go over the socket API.
 - How the plugin works and why — the poll loop, title resolution, sanitizing
   untrusted values, manual rename protection — is in

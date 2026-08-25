@@ -51,12 +51,12 @@ two polls a second come to about a thousandth of a core.
 ## Decide from freshly read state
 
 **Every poll reads the session and throws the result away again.** A tab's
-name is derived from the snapshot in hand, never from a cache of what was true
-earlier, which is what makes the resolver's determinism worth anything: identical
-session state always yields an identical title.
+name is derived from the state read for that poll, which is what makes the
+resolver's determinism worth anything: identical session state always yields an
+identical title.
 
-Two things are carried between polls, and both exist because a snapshot cannot
-express them:
+Three things are carried between polls, and each exists because a snapshot
+cannot express it:
 
 - **When each pane last changed** (`internal/state/changes.go`). A snapshot says
   what a pane holds but not when that became true, and a tab with several panes
@@ -64,6 +64,22 @@ express them:
   are monotonic, so comparing one poll's revisions with the last says which panes
   moved. The map is rebuilt from each snapshot, so panes that closed disappear
   from it for free.
+- **What each pane was running** (`internal/state/changes.go`, kept beside the
+  revisions). `PaneInfo` carries no process name, so naming a pane after the
+  program in it costs a `pane.process_info` request per pane. Measured against
+  an eight-pane session, a read is 0.17 ms and the snapshot before it 1.35 ms,
+  so making one for every pane every poll cost as much again as the snapshot —
+  and on a session where nothing is happening, every one of those reads returns
+  what the last already said. A pane whose revision has not moved is running
+  what it usually was, so its answer is reused until the revision moves. That
+  test is a hint rather than a guarantee, and it was measured to be one: over
+  ten minutes of a live eight-pane session the foreground processes changed nine
+  times and the revision moved with them only four, one pane going
+  `env` → `node` → `esbuild` → `fish` with its revision held at 10 throughout. A
+  revision says the pane *drew*, which starting a command usually but not always
+  provokes. So the reuse is bounded twice: by the revision, which catches the
+  common case in the very next poll, and by `processRefresh` (2 s), which is
+  what actually bounds how wrong the answer can be.
 - **What Auto Title last named each tab** (`internal/state/manual.go`), which is
   how a rename by the user is told from the plugin's own work. That is a design
   of its own: [manual rename protection](./manual-rename-protection.md).
@@ -76,10 +92,10 @@ changes name at most once per poll however fast its pane is churning, so
 
 1. `session.snapshot` — the whole session in one request.
 2. `Changes.Observe` — note which panes' revisions advanced.
-3. `tabsIn` — assemble tabs with their panes, asking `pane.process_info` per
-   pane. That is a request per pane, made rather than guessed at because it
-   measured cheaper than the snapshot that preceded it; a pane whose processes
-   cannot be read simply has none.
+3. `tabsIn` — assemble tabs with their panes, asking `pane.process_info` about
+   the panes that moved since they were last read and reusing the last answer
+   for the rest. A pane whose processes cannot be read simply has none, and a
+   failed read is not remembered as an answer.
 4. `Manual.Retain` — drop bookkeeping for tabs the session no longer holds.
 5. Per tab: skip it if locked, otherwise resolve a title, check whether the
    label moved under us, and rename when the result differs from the label the
@@ -88,8 +104,8 @@ changes name at most once per poll however fast its pane is churning, so
 **Deduplication is what keeps the loop quiet.** The snapshot reports each tab's
 current label, and a rename is skipped when the resolved title already equals
 it — which is also what stops a rename from provoking the next one. A session
-where every tab already carries the right name issues no requests beyond the
-snapshot and the per-pane reads.
+where every tab already carries the right name, and whose panes are sitting
+still, issues nothing beyond the snapshot itself.
 
 The whole poll is bounded by `pollTimeout` (5 s). A tab that closed between the
 snapshot and its rename answers `tab_not_found`, which is expected rather than an

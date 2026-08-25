@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -19,6 +20,15 @@ func testConfig() Config {
 
 func discardLogger() *slog.Logger {
 	return slog.New(slog.DiscardHandler)
+}
+
+// testResolver builds the shipped chain against a home directory of the test's
+// own, because CWD declines a pane sitting in the user's and the fixtures below
+// must not depend on whose machine they run on.
+func testResolver(t *testing.T) resolver.TitleResolver {
+	t.Helper()
+	t.Setenv("HOME", filepath.Join(t.TempDir(), "home"))
+	return resolver.Default(resolver.DefaultMaxLength)
 }
 
 // harness runs an App against a stubbed Herdr session.
@@ -41,7 +51,7 @@ func start(t *testing.T, tabs []herdr.TabInfo, panes []herdr.PaneInfo) *harness 
 func startWith(t *testing.T, client *herdr.StubClient) *harness {
 	t.Helper()
 
-	app := New(testConfig(), discardLogger(), resolver.Default(resolver.DefaultMaxLength))
+	app := New(testConfig(), discardLogger(), testResolver(t))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	h := &harness{t: t, client: client, done: make(chan struct{}), cancel: cancel}
@@ -209,12 +219,15 @@ func TestATabClosingMidPollIsNotFatal(t *testing.T) {
 }
 
 func TestFailedRenameIsRetriedOnTheNextPoll(t *testing.T) {
-	h := start(t,
+	// Armed before the run starts: the loop names what it finds without waiting
+	// for a tick, so a stub armed afterwards races the very first poll.
+	client := herdr.NewStub(
 		[]herdr.TabInfo{{TabID: "wE:t1", Label: "1"}},
 		[]herdr.PaneInfo{{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true}},
 	)
+	client.SetRenameError(errors.New("herdr is busy"))
+	h := startWith(t, client)
 
-	h.client.SetRenameError(errors.New("herdr is busy"))
 	h.awaitPolls(3)
 	if renames := h.client.Renames(); len(renames) != 0 {
 		t.Fatalf("issued %v while renaming was failing", renames)
@@ -355,10 +368,16 @@ func TestARemoteSessionIsNamedAfterItsHost(t *testing.T) {
 	)
 	h.awaitRenames(1)
 
+	// Typing the command draws in the pane, so a revision moves with it and the
+	// next poll knows to ask what is running now.
 	h.client.SetProcesses("wE:p1",
 		herdr.PaneProcessInfoProcess{Name: "fish", Argv: []string{"-fish"}},
 		herdr.PaneProcessInfoProcess{Name: "ssh", Argv: []string{"ssh", "-p", "2222", "deploy@prod-01"}},
 	)
+	h.client.SetPane(herdr.PaneInfo{
+		PaneID: "wE:p1", TabID: "wE:t1", Focused: true, Revision: 2,
+		CWD: "/Users/dev/work/dashboard",
+	})
 
 	renames := h.awaitRenames(2)
 	if want := "ssh › prod-01"; renames[1].Label != want {
@@ -374,7 +393,7 @@ func TestAPaneWhoseProcessesCannotBeReadIsStillNamed(t *testing.T) {
 		[]herdr.PaneInfo{{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true}},
 	)
 
-	app := New(testConfig(), discardLogger(), resolver.Default(resolver.DefaultMaxLength))
+	app := New(testConfig(), discardLogger(), testResolver(t))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan struct{})
@@ -519,5 +538,58 @@ func TestATabCreatedWithoutANameIsNamed(t *testing.T) {
 	renames := h.awaitRenames(2)
 	if got := renames[len(renames)-1]; got.TabID != "wE:t9" || got.Label != "api" {
 		t.Errorf("rename = %+v, want {wE:t9 api}", got)
+	}
+}
+
+func TestAPaneHoldingStillIsAskedAboutOnce(t *testing.T) {
+	// pane.process_info is a request per pane, and at two polls a second an
+	// unchanging session would spend all day repeating it.
+	h := start(t,
+		[]herdr.TabInfo{{TabID: "wE:t1", Label: "1"}},
+		[]herdr.PaneInfo{{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true}},
+	)
+	h.awaitRenames(1)
+	h.awaitPolls(10)
+
+	if reads := h.client.ProcessReads(); reads != 1 {
+		t.Errorf("read what the pane runs %d times over ten polls, want 1", reads)
+	}
+}
+
+func TestAPaneThatMovedIsAskedAboutAgain(t *testing.T) {
+	h := start(t,
+		[]herdr.TabInfo{{TabID: "wE:t1", Label: "1"}},
+		[]herdr.PaneInfo{{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true}},
+	)
+	h.awaitRenames(1)
+
+	h.client.SetProcesses("wE:p1", herdr.PaneProcessInfoProcess{Name: "nvim"})
+	h.client.SetPane(herdr.PaneInfo{
+		PaneID: "wE:p1", TabID: "wE:t1", Focused: true, Revision: 2,
+		CWD: "/Users/dev/work/dashboard",
+	})
+
+	if got := h.awaitRenames(2)[1].Label; got != "dashboard › nvim" {
+		t.Errorf("rename = %q, want %q", got, "dashboard › nvim")
+	}
+}
+
+func TestAPaneThatCannotBeReadIsAskedAgain(t *testing.T) {
+	// A failed read is not an answer, so it must not be remembered as one.
+	client := herdr.NewStub(
+		[]herdr.TabInfo{{TabID: "wE:t1", Label: "1"}},
+		[]herdr.PaneInfo{{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true}},
+	)
+	client.SetProcessError(errors.New("herdr is busy"))
+	h := startWith(t, client)
+	h.awaitPolls(3)
+
+	// The tab is already named from the snapshot alone; the second rename is
+	// the one that could only come from a process read that happened again.
+	client.SetProcessError(nil)
+	client.SetProcesses("wE:p1", herdr.PaneProcessInfoProcess{Name: "nvim"})
+
+	if got := h.awaitRenames(2)[1].Label; got != "dashboard › nvim" {
+		t.Errorf("rename = %q, want %q", got, "dashboard › nvim")
 	}
 }

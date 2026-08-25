@@ -3,7 +3,8 @@ package herdr
 import (
 	"context"
 	"fmt"
-	"sort"
+	"slices"
+	"strings"
 	"sync"
 )
 
@@ -23,8 +24,10 @@ type StubClient struct {
 	processes  map[string][]PaneProcessInfoProcess
 	renames    []RenameCall
 	renameErr  error
+	processErr error
 	callErr    error
 	polls      int
+	reads      int
 }
 
 var _ Client = (*StubClient)(nil)
@@ -93,6 +96,13 @@ func (s *StubClient) SetRenameError(err error) {
 	s.renameErr = err
 }
 
+// SetProcessError makes subsequent pane.process_info calls fail.
+func (s *StubClient) SetProcessError(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.processErr = err
+}
+
 // SetCallError makes every subsequent call fail, as a dropped socket would.
 func (s *StubClient) SetCallError(err error) {
 	s.mu.Lock()
@@ -104,7 +114,15 @@ func (s *StubClient) SetCallError(err error) {
 func (s *StubClient) Renames() []RenameCall {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return append([]RenameCall(nil), s.renames...)
+	return slices.Clone(s.renames)
+}
+
+// ProcessReads counts the pane.process_info calls received so far, which is how
+// a test sees that a pane was not asked about twice.
+func (s *StubClient) ProcessReads() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.reads
 }
 
 // Polls counts the snapshots taken so far.
@@ -133,13 +151,16 @@ func (s *StubClient) Call(ctx context.Context, method string, params any, result
 		}
 		s.polls++
 		target.Snapshot = Snapshot{
-			Workspaces: append([]WorkspaceInfo(nil), s.workspaces...),
+			Workspaces: slices.Clone(s.workspaces),
 			Tabs:       sorted(s.tabs, func(t TabInfo) string { return t.TabID }),
 			Panes:      sorted(s.panes, func(p PaneInfo) string { return p.PaneID }),
 		}
 		return nil
 
 	case MethodPaneProcessInfo:
+		if s.processErr != nil {
+			return s.processErr
+		}
 		target, ok := params.(PaneTarget)
 		if !ok {
 			return fmt.Errorf("stub client: unexpected params for %s", method)
@@ -151,6 +172,7 @@ func (s *StubClient) Call(ctx context.Context, method string, params any, result
 		if !ok {
 			return fmt.Errorf("stub client: unexpected result type for %s", method)
 		}
+		s.reads++
 		res.ProcessInfo.ForegroundProcesses = s.processes[target.PaneID]
 		return nil
 
@@ -184,6 +206,6 @@ func sorted[T any](items map[string]T, id func(T) string) []T {
 	for _, item := range items {
 		out = append(out, item)
 	}
-	sort.Slice(out, func(i, j int) bool { return id(out[i]) < id(out[j]) })
+	slices.SortFunc(out, func(a, b T) int { return strings.Compare(id(a), id(b)) })
 	return out
 }

@@ -41,9 +41,16 @@ Three, and no others (`internal/herdr/session.go`):
   Measured at 0.47 ms and 6 KB for six panes.
 - **`pane.process_info`** returns what is running in one pane. Measured at
   0.11 ms — less than the snapshot itself, because it reads the process table
-  rather than serializing the session. Its `foreground_processes` holds the
-  pane's foreground process *and that process's descendants*, each with `name`
-  and a nullable `argv`.
+  rather than serializing the session. It is one request *per pane* though, so
+  a poll that asks about every pane pays for the cheapness several times over:
+  on an eight-pane session the reads measured 0.17 ms each against a 1.35 ms
+  snapshot, which is as much again as the snapshot they follow. Its
+  `foreground_processes` holds the pane's foreground process *and that
+  process's descendants*, each with `name` and a nullable `argv`. **A pane's
+  revision does not track that list**: over ten minutes of a live eight-pane
+  session the processes changed nine times and the revision moved with them
+  four, one pane going `env` → `node` → `esbuild` → `fish` with its revision
+  held at 10. A revision reports that the pane drew, nothing more.
 - **`tab.rename`** takes `{tab_id, label}`. Measured at 0.16 ms median and
   0.21 ms at p95 over forty calls, against 0.99 ms for the `session.snapshot`
   preceding them. Renaming is not what limits anything.

@@ -4,7 +4,8 @@
 package resolver
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 	"strings"
 
 	"github.com/kryptamine/herdr-auto-title/internal/state"
@@ -44,7 +45,8 @@ type Source interface {
 	// what it reads, not for what it happened to find this time.
 	Confidence() int
 	// Resolve reports the parts this source derives, or false when the pane
-	// carries nothing this source recognizes.
+	// carries nothing this source recognizes. A nil pane is a tab with no
+	// panes at all, and every source declines it rather than panicking.
 	Resolve(pane *state.PaneState) (Parts, bool)
 }
 
@@ -74,9 +76,9 @@ func New(maxLength int, sources ...Source) *Deterministic {
 	if maxLength <= 0 {
 		maxLength = DefaultMaxLength
 	}
-	ordered := append([]Source(nil), sources...)
-	sort.SliceStable(ordered, func(i, j int) bool {
-		return ordered[i].Confidence() > ordered[j].Confidence()
+	ordered := slices.Clone(sources)
+	slices.SortStableFunc(ordered, func(a, b Source) int {
+		return cmp.Compare(b.Confidence(), a.Confidence())
 	})
 	return &Deterministic{sources: ordered, maxLength: maxLength}
 }
