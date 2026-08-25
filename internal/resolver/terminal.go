@@ -17,6 +17,9 @@ type TerminalTitle struct{}
 
 var _ Source = TerminalTitle{}
 
+// NewTerminalTitle builds the source.
+func NewTerminalTitle() TerminalTitle { return TerminalTitle{} }
+
 func (TerminalTitle) Name() string    { return "terminal_title" }
 func (TerminalTitle) Confidence() int { return ConfidenceTerminalTitle }
 

@@ -134,7 +134,7 @@ func TestAProjectNeverTakesAColon(t *testing.T) {
 }
 
 func TestProcessSourceOnANilPane(t *testing.T) {
-	if _, ok := (Process{}).Resolve(nil); ok {
+	if _, ok := NewProcess().Resolve(nil); ok {
 		t.Fatal("resolved a nil pane")
 	}
 }

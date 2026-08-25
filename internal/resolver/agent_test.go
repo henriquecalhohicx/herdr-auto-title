@@ -77,7 +77,7 @@ func TestAgentEchoingItsOwnNameIsNotAgentContext(t *testing.T) {
 		AgentTitle:   "Acme Bot",
 	}
 
-	if _, ok := (Agent{}).Resolve(pane); ok {
+	if _, ok := NewAgent().Resolve(pane); ok {
 		t.Error("the agent source claimed an agent naming itself")
 	}
 
@@ -104,7 +104,7 @@ func TestAgentTitleWithoutAnAgentIsIgnored(t *testing.T) {
 }
 
 func TestAgentSourceOnANilPane(t *testing.T) {
-	if _, ok := (Agent{}).Resolve(nil); ok {
+	if _, ok := NewAgent().Resolve(nil); ok {
 		t.Fatal("resolved a nil pane")
 	}
 }

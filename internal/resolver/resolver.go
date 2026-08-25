@@ -102,10 +102,10 @@ func New(maxLength int, sources ...Source) *Deterministic {
 // branchMax bounds what a git branch may contribute; zero leaves branches out.
 func Default(maxLength, branchMax int) *Deterministic {
 	return New(maxLength,
-		Agent{},
-		TerminalTitle{},
-		Process{},
-		SSH{},
+		NewAgent(),
+		NewTerminalTitle(),
+		NewProcess(),
+		NewSSH(),
 		NewGit(branchMax),
 		NewCWD(),
 	)

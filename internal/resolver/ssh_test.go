@@ -141,7 +141,7 @@ func TestTheMarkSurvivesARemoteTitle(t *testing.T) {
 }
 
 func TestSSHSourceOnANilPane(t *testing.T) {
-	if _, ok := (SSH{}).Resolve(nil); ok {
+	if _, ok := NewSSH().Resolve(nil); ok {
 		t.Fatal("resolved a nil pane")
 	}
 }

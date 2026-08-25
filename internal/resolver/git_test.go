@@ -79,7 +79,7 @@ func TestBranchBecomesTheActivity(t *testing.T) {
 	if parts.Context != "" {
 		t.Errorf("context = %q, want the directory source to supply it", parts.Context)
 	}
-	if got := (&Git{}).Confidence(); got != ConfidenceGit {
+	if got := NewGit(DefaultBranchMaxLength).Confidence(); got != ConfidenceGit {
 		t.Errorf("confidence = %d, want %d", got, ConfidenceGit)
 	}
 }
