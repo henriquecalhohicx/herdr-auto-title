@@ -22,13 +22,18 @@ subprocess at all — there is no `sh -c` anywhere to pass anything to.
 `Sanitize` (`internal/resolver/sanitize.go`) is the single gate. In order, it:
 
 1. strips ANSI escapes — CSI sequences, OSC strings and single-character escapes;
-2. maps newlines, carriage returns and tabs to spaces and drops every other
-   control character;
-3. collapses runs of whitespace;
-4. collapses runs of the separator and normalizes the spacing around it, so a
+2. maps every kind of space to a plain one — the non-breaking and the
+   ideographic included — and drops every control character;
+3. drops format characters, which are invisible and forge what the reader sees:
+   a right-to-left override reverses the label, a zero-width space makes a
+   second tab read identically to the first, a bidi isolate reorders what
+   surrounds it. The zero-width joiner is the one exception, kept because
+   emoji clusters are built out of it;
+4. collapses runs of whitespace;
+5. collapses runs of the separator and normalizes the spacing around it, so a
    value that already contains `›` cannot forge extra structure;
-5. trims leading and trailing separators and whitespace;
-6. truncates to the limit.
+6. trims leading and trailing separators and whitespace;
+7. truncates to the limit.
 
 `Sanitize` is idempotent: running it on its own output changes nothing.
 

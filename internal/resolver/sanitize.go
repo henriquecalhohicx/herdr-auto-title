@@ -15,6 +15,10 @@ const Separator = " " + separatorRune + " "
 
 const separatorRune = "›"
 
+// zeroWidthJoiner is the one format character a title may keep: dropping it
+// would break the emoji clusters truncation goes to such lengths to preserve.
+const zeroWidthJoiner = '\u200d'
+
 // trimmable are the characters a title must not start or end on: a separator
 // left dangling by truncation says a part was lost without saying which.
 const trimmable = " " + separatorRune
@@ -32,16 +36,24 @@ var (
 )
 
 // Sanitize turns an untrusted value into something safe to use as a tab label:
-// ANSI escapes and control characters go, whitespace and separators are
+// escapes and invisible characters go, whitespace and separators are
 // normalized, and the result is cut to maxLen columns. Empty means unusable.
 func Sanitize(s string, maxLen int) string {
 	s = ansiRe.ReplaceAllString(s, "")
 
 	s = strings.Map(func(r rune) rune {
-		if r == '\n' || r == '\r' || r == '\t' {
+		// Every kind of space, the non-breaking and the ideographic included,
+		// so the run below collapses them all.
+		if unicode.IsSpace(r) {
 			return ' '
 		}
 		if unicode.IsControl(r) {
+			return -1
+		}
+		// Format characters are invisible and forge what the reader sees: a
+		// bidi override reverses the label, a zero-width space makes a second
+		// tab read identically. The joiner holds emoji clusters together.
+		if unicode.Is(unicode.Cf, r) && r != zeroWidthJoiner {
 			return -1
 		}
 		return r

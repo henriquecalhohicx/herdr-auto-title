@@ -20,6 +20,8 @@ func TestSanitize(t *testing.T) {
 		{"leading and trailing separators are trimmed", "› dashboard ›", 64, "dashboard"},
 		{"surrounding whitespace is trimmed", "   dashboard   ", 64, "dashboard"},
 		{"control characters are removed", "dash\x00board\x07", 64, "dashboard"},
+		{"a non-breaking space collapses like any other", "dash\u00a0\u00a0board", 64, "dash board"},
+		{"an ideographic space collapses too", "dash\u3000board", 64, "dash board"},
 		{"empty input yields empty output", "", 64, ""},
 		{"whitespace only yields empty output", "   \n\t ", 64, ""},
 		{"escape only yields empty output", "\x1b[0m", 64, ""},
@@ -42,6 +44,40 @@ func TestSanitize(t *testing.T) {
 				t.Errorf("Sanitize(%q, %d) = %q, want %q", tc.in, tc.maxLen, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestSanitizeRemovesFormatCharacters(t *testing.T) {
+	// Invisible by definition, so each case names what it would forge.
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"a right-to-left override cannot reverse the label", "safe\u202egnp.txt", "safegnp.txt"},
+		{"a zero-width space cannot forge a second dashboard", "dash\u200bboard", "dashboard"},
+		{"a bidi isolate cannot reorder what surrounds it", "\u2066prod\u2069 deploy", "prod deploy"},
+		{"a soft hyphen cannot split a word invisibly", "dash\u00adboard", "dashboard"},
+		{"a word joiner is not a word", "dash\u2060board", "dashboard"},
+		{"a byte order mark is not part of the title", "\ufeffdashboard", "dashboard"},
+		{"format characters alone leave nothing", "\u200b\u202e", ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Sanitize(tc.in, 64); got != tc.want {
+				t.Errorf("Sanitize(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSanitizeKeepsTheZeroWidthJoiner(t *testing.T) {
+	// The one format character a title may carry: without it the family emoji
+	// truncation is careful to keep whole falls apart into four people.
+	family := "work \U0001F468\u200D\U0001F469\u200D\U0001F467\u200D\U0001F466"
+	if got := Sanitize(family, 64); got != family {
+		t.Errorf("Sanitize(%q) = %q, want it unchanged", family, got)
 	}
 }
 
