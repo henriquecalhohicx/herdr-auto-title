@@ -3,7 +3,8 @@ package herdr
 import (
 	"context"
 	"fmt"
-	"sort"
+	"slices"
+	"strings"
 	"sync"
 )
 
@@ -104,7 +105,7 @@ func (s *StubClient) SetCallError(err error) {
 func (s *StubClient) Renames() []RenameCall {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return append([]RenameCall(nil), s.renames...)
+	return slices.Clone(s.renames)
 }
 
 // Polls counts the snapshots taken so far.
@@ -133,7 +134,7 @@ func (s *StubClient) Call(ctx context.Context, method string, params any, result
 		}
 		s.polls++
 		target.Snapshot = Snapshot{
-			Workspaces: append([]WorkspaceInfo(nil), s.workspaces...),
+			Workspaces: slices.Clone(s.workspaces),
 			Tabs:       sorted(s.tabs, func(t TabInfo) string { return t.TabID }),
 			Panes:      sorted(s.panes, func(p PaneInfo) string { return p.PaneID }),
 		}
@@ -184,6 +185,6 @@ func sorted[T any](items map[string]T, id func(T) string) []T {
 	for _, item := range items {
 		out = append(out, item)
 	}
-	sort.Slice(out, func(i, j int) bool { return id(out[i]) < id(out[j]) })
+	slices.SortFunc(out, func(a, b T) int { return strings.Compare(id(a), id(b)) })
 	return out
 }

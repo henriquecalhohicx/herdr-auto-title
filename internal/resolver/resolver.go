@@ -4,7 +4,8 @@
 package resolver
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 	"strings"
 
 	"github.com/kryptamine/herdr-auto-title/internal/state"
@@ -74,9 +75,9 @@ func New(maxLength int, sources ...Source) *Deterministic {
 	if maxLength <= 0 {
 		maxLength = DefaultMaxLength
 	}
-	ordered := append([]Source(nil), sources...)
-	sort.SliceStable(ordered, func(i, j int) bool {
-		return ordered[i].Confidence() > ordered[j].Confidence()
+	ordered := slices.Clone(sources)
+	slices.SortStableFunc(ordered, func(a, b Source) int {
+		return cmp.Compare(b.Confidence(), a.Confidence())
 	})
 	return &Deterministic{sources: ordered, maxLength: maxLength}
 }

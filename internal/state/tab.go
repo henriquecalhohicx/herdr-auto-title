@@ -3,8 +3,9 @@
 package state
 
 import (
-	"sort"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/kryptamine/herdr-auto-title/internal/herdr"
@@ -130,7 +131,7 @@ func (t TabState) SortedPanes() []*PaneState {
 	for _, p := range t.Panes {
 		panes = append(panes, p)
 	}
-	sort.Slice(panes, func(i, j int) bool { return panes[i].ID < panes[j].ID })
+	slices.SortFunc(panes, func(a, b *PaneState) int { return strings.Compare(a.ID, b.ID) })
 	return panes
 }
 
