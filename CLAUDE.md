@@ -93,6 +93,12 @@ listed here** (`make probe-*`, `scripts/probe.py`).
   `foreground_processes` lists the pane's foreground process *and its
   descendants*, each with `name` and a nullable `argv`.
 - Pane revisions are monotonic, which is how a poll tells which panes moved.
+- **`TabInfo.number` is not the label an unnamed tab carries.** It counts every
+  tab the workspace has ever held and never repeats (a six-tab workspace
+  numbered 2, 9, 30, 33, 35, 36). Herdr labels an unnamed tab with its
+  *position* in the workspace, counted from one, and that label shifts down when
+  a tab to its left closes. The snapshot lists tabs in display order, so the
+  position is their count within the workspace.
 - `tab.get` and `pane.get` read one object each; `pane.list` filters by
   workspace only, not by tab. Neither is needed while the snapshot is one call.
 

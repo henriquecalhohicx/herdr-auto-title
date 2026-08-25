@@ -110,19 +110,23 @@ type TabState struct {
 	// WorkspaceName is the label Herdr shows above this tab. A tab does not
 	// need to repeat what the workspace already says.
 	WorkspaceName string
-	// DefaultName is the label Herdr gives a tab nobody has named: its number.
-	// A tab still carrying it has not been claimed by anyone.
+	// DefaultName is the label Herdr gives a tab nobody has named: its place
+	// in its workspace, counted from one. A tab still carrying it has not been
+	// claimed by anyone. This is not TabInfo.number, which never repeats and
+	// runs far ahead of the tab count; the label follows the tabs and drops by
+	// one whenever a tab to the left of it closes.
 	DefaultName string
 	Panes       map[string]*PaneState
 }
 
-// TabFrom builds tab state from what a read returned.
-func TabFrom(info herdr.TabInfo, workspaceName string, panes []*PaneState) TabState {
+// TabFrom builds tab state from what a read returned. Position is the tab's
+// place in its workspace, counted from one.
+func TabFrom(info herdr.TabInfo, workspaceName string, position int, panes []*PaneState) TabState {
 	tab := TabState{
 		ID:            info.TabID,
 		CurrentName:   info.Label,
 		WorkspaceName: workspaceName,
-		DefaultName:   strconv.FormatUint(info.Number, 10),
+		DefaultName:   strconv.Itoa(position),
 		Panes:         make(map[string]*PaneState, len(panes)),
 	}
 	for _, pane := range panes {

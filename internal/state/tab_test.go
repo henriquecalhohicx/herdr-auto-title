@@ -43,6 +43,7 @@ func TestTabFromKeepsItsLabel(t *testing.T) {
 	tab := TabFrom(
 		herdr.TabInfo{TabID: "wE:t1", Label: "dashboard"},
 		"dashboard",
+		1,
 		[]*PaneState{{ID: "wE:p1", CWD: "/work/dashboard"}},
 	)
 
@@ -51,6 +52,9 @@ func TestTabFromKeepsItsLabel(t *testing.T) {
 	}
 	if tab.WorkspaceName != "dashboard" {
 		t.Errorf("workspace name = %q, want dashboard", tab.WorkspaceName)
+	}
+	if tab.DefaultName != "1" {
+		t.Errorf("default name = %q, want the tab's position 1", tab.DefaultName)
 	}
 	if pane := tab.Panes["wE:p1"]; pane == nil || pane.CWD != "/work/dashboard" {
 		t.Errorf("pane wE:p1 = %+v, want cwd /work/dashboard", pane)

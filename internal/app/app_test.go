@@ -109,8 +109,8 @@ func TestATabAppearingLaterIsNamed(t *testing.T) {
 	h := start(t, nil, nil)
 	h.awaitPolls(1)
 
-	// A tab Herdr has just made carries its number and nothing else.
-	h.client.SetTab(herdr.TabInfo{TabID: "wE:t1", Label: "1", Number: 1})
+	// A tab Herdr has just made carries its position and nothing else.
+	h.client.SetTab(herdr.TabInfo{TabID: "wE:t1", Label: "1"})
 	h.client.SetPane(herdr.PaneInfo{
 		PaneID: "wE:p1", TabID: "wE:t1", Focused: true,
 		CWD:                   "/Users/dev/work/dashboard",
@@ -443,12 +443,12 @@ func TestATabCreatedAndNamedBeforeTheNextPollIsLeftAlone(t *testing.T) {
 	// poll that would first see it. Auto Title never saw it carrying its
 	// number, so the name on it is not Auto Title's.
 	h := start(t,
-		[]herdr.TabInfo{{TabID: "wE:t1", Label: "1", Number: 1}},
+		[]herdr.TabInfo{{TabID: "wE:t1", Label: "1"}},
 		[]herdr.PaneInfo{{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true}},
 	)
 	h.awaitRenames(1)
 
-	h.client.SetTab(herdr.TabInfo{TabID: "wE:t9", Label: "My thing", Number: 9})
+	h.client.SetTab(herdr.TabInfo{TabID: "wE:t9", Label: "My thing"})
 	h.client.SetPane(herdr.PaneInfo{PaneID: "wE:p9", TabID: "wE:t9", CWD: "/Users/dev/work/api", Focused: true})
 
 	h.awaitPolls(h.client.Polls() + 4)
@@ -460,15 +460,17 @@ func TestATabCreatedAndNamedBeforeTheNextPollIsLeftAlone(t *testing.T) {
 }
 
 func TestATabCreatedWithoutANameIsNamed(t *testing.T) {
-	// The other half: Herdr names a new tab after its number, and that is not
-	// somebody's choice.
+	// The other half: Herdr names a new tab after its place in the workspace,
+	// and that is not somebody's choice. The label is the position — the
+	// second tab is "2" — and not TabInfo.number, which counts every tab the
+	// workspace has ever held.
 	h := start(t,
-		[]herdr.TabInfo{{TabID: "wE:t1", Label: "1", Number: 1}},
+		[]herdr.TabInfo{{TabID: "wE:t1", Label: "1"}},
 		[]herdr.PaneInfo{{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true}},
 	)
 	h.awaitRenames(1)
 
-	h.client.SetTab(herdr.TabInfo{TabID: "wE:t9", Label: "9", Number: 9})
+	h.client.SetTab(herdr.TabInfo{TabID: "wE:t9", Label: "2"})
 	h.client.SetPane(herdr.PaneInfo{PaneID: "wE:p9", TabID: "wE:t9", CWD: "/Users/dev/work/api", Focused: true})
 
 	renames := h.awaitRenames(2)

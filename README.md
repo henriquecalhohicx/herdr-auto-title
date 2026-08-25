@@ -93,9 +93,12 @@ There is no scrollback scanning and no LLM.
   work. The *first poll* never locks anything — every tab starts out carrying a
   label that is not yet the right one, so locking on that would claim the whole
   session at startup. After that, a tab Auto Title has never seen is one that
-  did not exist before, and Herdr names a new tab after its number: a new tab
-  already carrying something else was named by whoever made it, even if that
-  happened in the half-second before the poll that first saw it.
+  did not exist before, and Herdr names a new tab after its place in the
+  workspace: a new tab already carrying something else was named by whoever made
+  it, even if that happened in the half-second before the poll that first saw
+  it. A tab wearing that default label is nobody's, whether it is new or has
+  been named for hours — the label comes back when a tab is unnamed again, and
+  every tab shifts one place left when a tab before it closes.
 - **Deduplication.** The snapshot reports each tab's current label, and a rename
   is skipped when the resolved title already equals it. This is what keeps the
   loop quiet, and what stops a rename from provoking the next one.
@@ -351,6 +354,14 @@ Verified against Herdr 0.8.2, protocol 20:
   pane carries one; a pane with no agent reports `unknown`.
 - Pane revisions are monotonic per pane, which is how one poll tells which panes
   moved since the last.
+- **`TabInfo.number` is not the label an unnamed tab carries.** `number` counts
+  every tab its workspace has ever held and never repeats — a workspace holding
+  six tabs was seen numbering them 2, 9, 30, 33, 35, 36. The label Herdr puts on
+  a tab nobody has named is its *position* in the workspace, counted from one,
+  and it slides down whenever a tab to the left of it closes: three fresh tabs
+  labelled `5`, `6`, `7` became `5`, `6` when the middle one was closed. Tabs
+  arrive from `session.snapshot` in the order they are shown, so the position is
+  the count of the workspace's tabs up to and including that one.
 - `tab.get` and `pane.get` read one object each; `pane.list` filters by
   workspace only, not by tab.
 - A malformed request is answered with an uncorrelated error frame and the

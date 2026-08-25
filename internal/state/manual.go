@@ -21,9 +21,9 @@ import (
 // produce — which is most of them, and the whole session at once.
 //
 // That rule is about the first poll, not about each tab's first sighting. A tab
-// that turns up later is new, and Herdr names a new tab after its number: a new
-// tab already carrying something else was named by the person who made it,
-// possibly in the half-second before the first poll could see it.
+// that turns up later is new, and Herdr names a new tab after its place in the
+// workspace: a new tab already carrying something else was named by the person
+// who made it, possibly in the half-second before the first poll could see it.
 type Manual struct {
 	mu   sync.Mutex
 	path string
@@ -101,9 +101,10 @@ type Sighting struct {
 // there.
 //
 // A label the resolver would produce anyway is never the user's — it cannot be
-// told from Auto Title's own work, and is harmless either way. Past that, a
-// label that has moved since the last look was moved by someone, and a tab
-// turning up already named was named before Auto Title first saw it.
+// told from Auto Title's own work, and is harmless either way. Neither is
+// Herdr's own label for an unclaimed tab. Past that, a label that has moved
+// since the last look was moved by someone, and a tab turning up already named
+// was named before Auto Title first saw it.
 func (m *Manual) Observe(s Sighting) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -114,6 +115,13 @@ func (m *Manual) Observe(s Sighting) bool {
 	switch {
 	case s.Current == s.Desired:
 		return false
+	case s.Current == s.Default:
+		// Nobody has named this tab: it carries the label Herdr gives one that
+		// is only a position. That is not just how a tab starts out — the
+		// label comes back whenever the tab is unnamed again, and every tab to
+		// the right of a closed one inherits its neighbour's, so a tab already
+		// known can wear it too.
+		return false
 	case known:
 		if s.Current == previous {
 			// Nothing happened to this tab.
@@ -122,9 +130,6 @@ func (m *Manual) Observe(s Sighting) bool {
 	case !m.settled:
 		// The first poll, where every tab is new to Auto Title and almost none
 		// carries a name it has set.
-		return false
-	case s.Current == s.Default:
-		// Herdr made this tab and nobody has named it.
 		return false
 	}
 

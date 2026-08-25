@@ -169,9 +169,16 @@ func (a *App) tabsIn(ctx context.Context, client herdr.Client, snapshot herdr.Sn
 			state.PaneFrom(pane, processes, a.changes.ChangedAt(pane.PaneID)))
 	}
 
+	// A tab nobody has named carries its place in its workspace, and the
+	// snapshot lists tabs in the order they are shown, so counting them gives
+	// the label Herdr would have put there.
+	positions := make(map[string]int, len(snapshot.Workspaces))
+
 	tabs := make([]state.TabState, 0, len(snapshot.Tabs))
 	for _, info := range snapshot.Tabs {
-		tabs = append(tabs, state.TabFrom(info, workspaces[info.WorkspaceID], byTab[info.TabID]))
+		positions[info.WorkspaceID]++
+		tabs = append(tabs, state.TabFrom(
+			info, workspaces[info.WorkspaceID], positions[info.WorkspaceID], byTab[info.TabID]))
 	}
 	return tabs
 }

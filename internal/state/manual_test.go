@@ -14,7 +14,7 @@ func newManual(t *testing.T) *Manual {
 	return m
 }
 
-// sighting is the common case: a tab Herdr made and numbered.
+// sighting is the common case: a tab sitting first in its workspace.
 func sighting(tabID, current, desired string) Sighting {
 	return Sighting{TabID: tabID, Current: current, Desired: desired, Default: "1"}
 }
@@ -38,8 +38,8 @@ func TestTheFirstPollNeverLocks(t *testing.T) {
 
 func TestATabTurningUpAlreadyNamedIsTheUsers(t *testing.T) {
 	// The case that made this rule necessary: a tab created and named faster
-	// than the next poll. Auto Title never saw it carrying its number, so the
-	// name it carries is not Auto Title's.
+	// than the next poll. Auto Title never saw it carrying its position, so
+	// the name it carries is not Auto Title's.
 	m := newManual(t)
 
 	if !m.Observe(Sighting{TabID: "wE:t9", Current: "My thing", Desired: "dashboard", Default: "9"}) {
@@ -51,11 +51,29 @@ func TestATabTurningUpAlreadyNamedIsTheUsers(t *testing.T) {
 }
 
 func TestATabTurningUpUnnamedIsNotTheUsers(t *testing.T) {
-	// Herdr names a new tab after its number. Nobody has claimed this one.
+	// Herdr names a new tab after its position. Nobody has claimed this one.
 	m := newManual(t)
 
 	if m.Observe(Sighting{TabID: "wE:t9", Current: "9", Desired: "dashboard", Default: "9"}) {
 		t.Error("an unnamed new tab was locked")
+	}
+}
+
+func TestATabFallingBackToItsDefaultLabelIsNotTheUsers(t *testing.T) {
+	// Herdr's default label is not only how a tab starts out. It comes back
+	// when the tab is unnamed again, and it slides down a place for every tab
+	// to the left of it that closes — so a tab Auto Title has been naming for
+	// a while can find itself wearing one. Locking there would freeze the tab
+	// at a number for the rest of the session.
+	m := newManual(t)
+	m.Observe(sighting("wE:t1", "1", "dashboard"))
+	m.Applied("wE:t1", "dashboard")
+
+	if m.Observe(sighting("wE:t1", "1", "dashboard")) {
+		t.Fatal("a tab back on its default label was read as the user's")
+	}
+	if m.Locked("wE:t1") {
+		t.Error("the tab is locked")
 	}
 }
 
