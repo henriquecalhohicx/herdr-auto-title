@@ -1,36 +1,11 @@
-<h1 align="center">
-  <img
-  src="assets/banner.png"
-  alt="Herdr Auto Title: smarter tab titles, zero effort"
-  width="800"
-  />
-</h1>
-
 <div align="center">
-  <a href="https://github.com/kryptamine/herdr-auto-title/actions/workflows/ci.yml">
-    <img
-    src="https://img.shields.io/github/actions/workflow/status/kryptamine/herdr-auto-title/ci.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI"
-    alt="CI Badge"
-    />
-  </a>
-  <a href="https://github.com/kryptamine/herdr-auto-title/releases">
-    <img
-    src="https://img.shields.io/github/v/release/kryptamine/herdr-auto-title?style=for-the-badge&logo=github&color=0797ff&labelColor=000000"
-    alt="Release Badge"
-    />
-  </a>
-  <a href="https://go.dev">
-    <img
-    src="https://img.shields.io/github/go-mod/go-version/kryptamine/herdr-auto-title?style=for-the-badge&logo=go&logoColor=white&labelColor=000000"
-    alt="Go Version Badge"
-    />
-  </a>
-  <a href="LICENSE">
-    <img
-    src="https://img.shields.io/badge/license-MIT-0797ff?style=for-the-badge&labelColor=000000"
-    alt="License Badge"
-    />
-  </a>
+  <img src="assets/banner.png" alt="Herdr Auto Title: smarter tab titles, zero effort" width="800">
+  <p>
+    <a href="https://github.com/kryptamine/herdr-auto-title/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/kryptamine/herdr-auto-title/ci.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI&labelColor=000000" alt="CI status"></a>
+    <a href="https://github.com/kryptamine/herdr-auto-title/releases"><img src="https://img.shields.io/github/v/release/kryptamine/herdr-auto-title?style=for-the-badge&logo=github&logoColor=white&color=0797ff&labelColor=000000" alt="Latest release"></a>
+    <a href="https://go.dev"><img src="https://img.shields.io/github/go-mod/go-version/kryptamine/herdr-auto-title?style=for-the-badge&logo=go&logoColor=white&color=0797ff&labelColor=000000" alt="Go version"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-0797ff?style=for-the-badge&labelColor=000000" alt="MIT licence"></a>
+  </p>
 </div>
 
 A [Herdr](https://herdr.dev) plugin that reads your session twice a second and
