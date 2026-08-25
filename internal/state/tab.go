@@ -106,15 +106,19 @@ type TabState struct {
 	// CurrentName is the label the tab carries right now, which is what lets
 	// a poll skip a rename that would change nothing.
 	CurrentName string
-	Panes       map[string]*PaneState
+	// WorkspaceName is the label Herdr shows above this tab. A tab does not
+	// need to repeat what the workspace already says.
+	WorkspaceName string
+	Panes         map[string]*PaneState
 }
 
 // TabFrom builds tab state from what a read returned.
-func TabFrom(info herdr.TabInfo, panes []*PaneState) TabState {
+func TabFrom(info herdr.TabInfo, workspaceName string, panes []*PaneState) TabState {
 	tab := TabState{
-		ID:          info.TabID,
-		CurrentName: info.Label,
-		Panes:       make(map[string]*PaneState, len(panes)),
+		ID:            info.TabID,
+		CurrentName:   info.Label,
+		WorkspaceName: workspaceName,
+		Panes:         make(map[string]*PaneState, len(panes)),
 	}
 	for _, pane := range panes {
 		tab.Panes[pane.ID] = pane

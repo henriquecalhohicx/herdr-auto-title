@@ -154,3 +154,58 @@ func TestSourceThatDeclinesIsSkipped(t *testing.T) {
 		t.Errorf("decision = %+v, want dashboard via cwd", got)
 	}
 }
+
+func TestATabDoesNotRepeatItsWorkspace(t *testing.T) {
+	// Herdr shows the workspace above its tabs, so a tab in the workspace it is
+	// named after spends half its width saying what is already on screen.
+	tab := tabWithPane(&state.PaneState{
+		CWD:           "/Users/dev/work/dashboard",
+		TerminalTitle: "Fix OAuth redirect",
+	})
+	tab.WorkspaceName = "dashboard"
+
+	got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(context.Background(), tab)
+	if got.Name != "Fix OAuth redirect" {
+		t.Errorf("name = %q, want %q", got.Name, "Fix OAuth redirect")
+	}
+}
+
+func TestATabWithNothingElseKeepsItsContext(t *testing.T) {
+	// Dropping it here would leave the tab with no name at all, which loses
+	// more than it saves.
+	tab := tabWithPane(&state.PaneState{CWD: "/Users/dev/work/dashboard"})
+	tab.WorkspaceName = "dashboard"
+
+	got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(context.Background(), tab)
+	if got.Name != "dashboard" {
+		t.Errorf("name = %q, want dashboard", got.Name)
+	}
+}
+
+func TestADifferentWorkspaceIsNotDropped(t *testing.T) {
+	// A tab whose directory left its workspace behind is exactly the tab that
+	// needs to say where it is.
+	tab := tabWithPane(&state.PaneState{
+		CWD:           "/Users/dev/work/dashboard",
+		TerminalTitle: "Fix OAuth redirect",
+	})
+	tab.WorkspaceName = "api"
+
+	got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(context.Background(), tab)
+	if want := "dashboard · Fix OAuth redirect"; got.Name != want {
+		t.Errorf("name = %q, want %q", got.Name, want)
+	}
+}
+
+func TestAWorkspaceWithoutAName(t *testing.T) {
+	// An unnamed workspace must not make every context look like a repeat.
+	tab := tabWithPane(&state.PaneState{
+		CWD:           "/Users/dev/work/dashboard",
+		TerminalTitle: "Fix OAuth redirect",
+	})
+
+	got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(context.Background(), tab)
+	if want := "dashboard · Fix OAuth redirect"; got.Name != want {
+		t.Errorf("name = %q, want %q", got.Name, want)
+	}
+}

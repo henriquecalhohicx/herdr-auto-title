@@ -14,11 +14,19 @@ const (
 // more; adding a field here that nothing uses makes the type claim a dependency
 // the code does not have.
 
+// WorkspaceInfo describes a workspace. Its label is what Herdr shows above the
+// tabs, and it is usually the project every tab in it belongs to.
+type WorkspaceInfo struct {
+	WorkspaceID string `json:"workspace_id"`
+	Label       string `json:"label"`
+}
+
 // TabInfo describes a tab. Optional fields are decoded as plain strings, so a
 // JSON null leaves them empty rather than failing.
 type TabInfo struct {
-	TabID string `json:"tab_id"`
-	Label string `json:"label"`
+	TabID       string `json:"tab_id"`
+	WorkspaceID string `json:"workspace_id"`
+	Label       string `json:"label"`
 }
 
 // PaneInfo describes a pane. It carries no foreground process name: that is
@@ -62,6 +70,8 @@ type PaneProcessInfo struct {
 
 // Snapshot is the whole session as session.snapshot reports it.
 type Snapshot struct {
+	Workspaces []WorkspaceInfo `json:"workspaces"`
+
 	Tabs     []TabInfo  `json:"tabs"`
 	Panes    []PaneInfo `json:"panes"`
 	Protocol int        `json:"protocol"`

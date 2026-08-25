@@ -131,6 +131,14 @@ func (d *Deterministic) Resolve(_ context.Context, tab state.TabState) Decision 
 		parts.Activity = ""
 	}
 
+	// Herdr shows the workspace above its tabs, so a tab in the workspace it is
+	// named after spends half its width saying what is already on screen. It is
+	// dropped only when something else remains: a tab reduced to nothing has
+	// lost more than it saved.
+	if parts.Activity != "" && strings.EqualFold(parts.Context, tab.WorkspaceName) {
+		parts.Context = ""
+	}
+
 	name := Format(parts, d.maxLength)
 	if name == "" {
 		return Decision{Name: GenericFallback, Confidence: ConfidenceFallback, Reason: "generic_fallback"}

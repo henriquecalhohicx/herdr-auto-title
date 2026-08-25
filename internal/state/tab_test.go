@@ -42,11 +42,15 @@ func TestSelectContextPaneFallsBackToMostRecent(t *testing.T) {
 func TestTabFromKeepsItsLabel(t *testing.T) {
 	tab := TabFrom(
 		herdr.TabInfo{TabID: "wE:t1", Label: "dashboard"},
+		"dashboard",
 		[]*PaneState{{ID: "wE:p1", CWD: "/work/dashboard"}},
 	)
 
 	if tab.CurrentName != "dashboard" {
 		t.Errorf("current name = %q, want dashboard", tab.CurrentName)
+	}
+	if tab.WorkspaceName != "dashboard" {
+		t.Errorf("workspace name = %q, want dashboard", tab.WorkspaceName)
 	}
 	if pane := tab.Panes["wE:p1"]; pane == nil || pane.CWD != "/work/dashboard" {
 		t.Errorf("pane wE:p1 = %+v, want cwd /work/dashboard", pane)

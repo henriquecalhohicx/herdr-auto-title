@@ -16,14 +16,15 @@ type RenameCall struct {
 // StubClient is an in-memory Client for tests. Tests change the session it
 // describes and inspect the renames it received.
 type StubClient struct {
-	mu        sync.Mutex
-	tabs      map[string]TabInfo
-	panes     map[string]PaneInfo
-	processes map[string][]PaneProcessInfoProcess
-	renames   []RenameCall
-	renameErr error
-	callErr   error
-	polls     int
+	mu         sync.Mutex
+	workspaces []WorkspaceInfo
+	tabs       map[string]TabInfo
+	panes      map[string]PaneInfo
+	processes  map[string][]PaneProcessInfoProcess
+	renames    []RenameCall
+	renameErr  error
+	callErr    error
+	polls      int
 }
 
 var _ Client = (*StubClient)(nil)
@@ -42,6 +43,13 @@ func NewStub(tabs []TabInfo, panes []PaneInfo) *StubClient {
 		s.panes[pane.PaneID] = pane
 	}
 	return s
+}
+
+// SetWorkspaces sets the workspaces the session reports.
+func (s *StubClient) SetWorkspaces(workspaces ...WorkspaceInfo) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.workspaces = workspaces
 }
 
 // SetTab adds or replaces a tab.
@@ -125,8 +133,9 @@ func (s *StubClient) Call(ctx context.Context, method string, params any, result
 		}
 		s.polls++
 		target.Snapshot = Snapshot{
-			Tabs:  sorted(s.tabs, func(t TabInfo) string { return t.TabID }),
-			Panes: sorted(s.panes, func(p PaneInfo) string { return p.PaneID }),
+			Workspaces: append([]WorkspaceInfo(nil), s.workspaces...),
+			Tabs:       sorted(s.tabs, func(t TabInfo) string { return t.TabID }),
+			Panes:      sorted(s.panes, func(p PaneInfo) string { return p.PaneID }),
 		}
 		return nil
 

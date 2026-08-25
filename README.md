@@ -204,6 +204,14 @@ An agent that has not decided on a topic yet titles its window after itself, so
 reads `dashboard · claude` until there is something to report, then
 `dashboard · claude:Implement OAuth scopes`.
 
+Herdr shows the workspace above its tabs, so a tab in the workspace it is named
+after spends half its width repeating what is already on screen. That half is
+dropped: in a workspace called `dashboard`, a tab reads `nvim:auth.ts` rather
+than `dashboard · nvim:auth.ts`. It is dropped only when something else remains
+— a tab reduced to nothing has lost more than it saved — and only on an exact
+match, so a tab whose directory has left its workspace behind is exactly the one
+that keeps saying where it is.
+
 Every value that reaches a title — a directory name, a terminal title, an agent
 title — is stripped of ANSI escapes and control characters, whitespace
 is normalized, repeated separators are collapsed, and the result is truncated to

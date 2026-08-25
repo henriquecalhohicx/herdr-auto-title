@@ -122,6 +122,11 @@ func (a *App) poll(ctx context.Context, client herdr.Client) error {
 // the snapshot that preceded it — so it is made for every pane rather than
 // guessed at, and a pane whose processes cannot be read simply has none.
 func (a *App) tabsIn(ctx context.Context, client herdr.Client, snapshot herdr.Snapshot) []state.TabState {
+	workspaces := make(map[string]string, len(snapshot.Workspaces))
+	for _, workspace := range snapshot.Workspaces {
+		workspaces[workspace.WorkspaceID] = workspace.Label
+	}
+
 	byTab := make(map[string][]*state.PaneState, len(snapshot.Tabs))
 	for _, pane := range snapshot.Panes {
 		processes, err := herdr.PaneProcesses(ctx, client, pane.PaneID)
@@ -134,7 +139,7 @@ func (a *App) tabsIn(ctx context.Context, client herdr.Client, snapshot herdr.Sn
 
 	tabs := make([]state.TabState, 0, len(snapshot.Tabs))
 	for _, info := range snapshot.Tabs {
-		tabs = append(tabs, state.TabFrom(info, byTab[info.TabID]))
+		tabs = append(tabs, state.TabFrom(info, workspaces[info.WorkspaceID], byTab[info.TabID]))
 	}
 	return tabs
 }

@@ -355,3 +355,20 @@ func TestAPaneWhoseProcessesCannotBeReadIsStillNamed(t *testing.T) {
 	cancel()
 	<-done
 }
+
+func TestAWorkspaceNameIsNotRepeatedInItsTabs(t *testing.T) {
+	h := start(t,
+		[]herdr.TabInfo{{TabID: "wE:t1", WorkspaceID: "wE", Label: "1"}},
+		[]herdr.PaneInfo{{
+			PaneID: "wE:p1", TabID: "wE:t1", Focused: true,
+			CWD:                   "/Users/dev/work/dashboard",
+			TerminalTitleStripped: "Fix OAuth redirect",
+		}},
+	)
+	h.client.SetWorkspaces(herdr.WorkspaceInfo{WorkspaceID: "wE", Label: "dashboard"})
+
+	renames := h.awaitRenames(1)
+	if got := renames[len(renames)-1].Label; got != "Fix OAuth redirect" {
+		t.Errorf("rename = %q, want %q", got, "Fix OAuth redirect")
+	}
+}
