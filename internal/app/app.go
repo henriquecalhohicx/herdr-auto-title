@@ -22,6 +22,9 @@ type App struct {
 	titles  resolver.TitleResolver
 	changes *state.Changes
 	manual  *state.Manual
+	// failures is the run of polls that have failed in a row, which decides
+	// how loudly the next one is reported.
+	failures failureLog
 }
 
 // New builds the application. The connection is supplied to Run, so the same
@@ -40,10 +43,8 @@ func New(cfg Config, log *slog.Logger, titles resolver.TitleResolver) *App {
 // deliberately not used, and the measurements that settled that are in
 // docs/architecture/poll-loop.md.
 func (a *App) Run(ctx context.Context, client herdr.Client) error {
-	var failures failureLog
-
 	// Name what already exists before waiting for the first tick.
-	a.attempt(ctx, client, &failures)
+	a.poll(ctx, client)
 
 	ticker := time.NewTicker(a.cfg.Poll)
 	defer ticker.Stop()
@@ -54,26 +55,26 @@ func (a *App) Run(ctx context.Context, client herdr.Client) error {
 			a.log.Info("shutting down")
 			return nil
 		case <-ticker.C:
-			a.attempt(ctx, client, &failures)
+			a.poll(ctx, client)
 		}
 	}
 }
 
-// attempt polls once and reports how it went, on the schedule failures keep. No
-// poll failing is fatal, the first one included: a plugin that gave up would
-// stay dead, and Herdr's socket can be a moment behind the process it launched.
-func (a *App) attempt(ctx context.Context, client herdr.Client, failures *failureLog) {
-	err := a.poll(ctx, client)
+// poll is one turn of the loop. No failure is fatal, the first one included: a
+// plugin that gave up would stay dead, and Herdr's socket can be a moment
+// behind the process it just launched.
+func (a *App) poll(ctx context.Context, client herdr.Client) {
+	err := a.readAndRename(ctx, client)
 	if ctx.Err() != nil {
 		return
 	}
 	if err != nil {
-		if run := failures.failed(); run > 0 {
+		if run := a.failures.failed(); run > 0 {
 			a.log.Warn("poll failed", "error", err, "in a row", run)
 		}
 		return
 	}
-	if run := failures.recovered(); run > 0 {
+	if run := a.failures.recovered(); run > 0 {
 		a.log.Info("the session is answering again", "polls missed", run)
 	}
 }
@@ -105,8 +106,9 @@ func (f *failureLog) recovered() int {
 	return run
 }
 
-// poll reads the session and renames every tab whose title no longer fits.
-func (a *App) poll(ctx context.Context, client herdr.Client) error {
+// readAndRename reads the session and renames every tab whose title no longer
+// fits.
+func (a *App) readAndRename(ctx context.Context, client herdr.Client) error {
 	ctx, cancel := context.WithTimeout(ctx, pollTimeout)
 	defer cancel()
 

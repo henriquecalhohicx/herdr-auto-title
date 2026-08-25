@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	// sshKind marks a host as reached over ssh: `ssh › prod-01`. It goes on
-	// the host, not the activity, which the terminal title would outrank —
-	// see docs/architecture/title-resolution.md.
+	// sshKind marks a session as remote: `ssh › prod-01`, or `ssh` alone when
+	// the host cannot be read. It goes in the context, never the activity,
+	// which the terminal title would outrank — see docs/architecture.
 	sshKind = "ssh"
 )
 

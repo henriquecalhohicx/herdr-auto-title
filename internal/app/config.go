@@ -47,18 +47,22 @@ func LoadConfig() (Config, []string) {
 	}
 	var warnings []string
 
-	cfg.Debug = read(&warnings, EnvDebug, cfg.Debug, boolean)
-	cfg.Poll = read(&warnings, EnvPoll, cfg.Poll, milliseconds)
-	cfg.MaxLength = read(&warnings, EnvMaxLength, cfg.MaxLength, number(positive))
-	cfg.ManualPath = read(&warnings, EnvManual, cfg.ManualPath, text)
+	cfg.Debug = fromEnv(&warnings, EnvDebug, cfg.Debug, boolean)
+	cfg.Poll = fromEnv(&warnings, EnvPoll, cfg.Poll, milliseconds)
+	cfg.MaxLength = fromEnv(&warnings, EnvMaxLength, cfg.MaxLength, count)
+	// A path needs neither parsing nor checking, so it does not go through
+	// fromEnv: any string the user set is the path they meant.
+	if raw := os.Getenv(EnvManual); raw != "" {
+		cfg.ManualPath = raw
+	}
 
 	return cfg, warnings
 }
 
-// read returns what the environment says name is, or fallback when it says
+// fromEnv returns what the environment says name is, or fallback when it says
 // nothing usable. Nothing here fails: a typo must not stop the plugin starting,
 // which is why it warns instead, and is the only place a warning is worded.
-func read[T any](warnings *[]string, name string, fallback T, convert converter[T]) T {
+func fromEnv[T any](warnings *[]string, name string, fallback T, convert converter[T]) T {
 	raw := os.Getenv(name)
 	if raw == "" {
 		return fallback
@@ -75,10 +79,6 @@ func read[T any](warnings *[]string, name string, fallback T, convert converter[
 // wrong with it.
 type converter[T any] func(raw string) (T, error)
 
-// validator says what is wrong with a number, or nothing when it is usable.
-// It is separate from parsing because the two limits differ only in this.
-type validator func(value int) error
-
 // The reasons a variable is rejected. Each reads as the middle of the warning
 // it lands in: `HERDR_AUTO_TITLE_POLL_MS="0" must be positive, using 500ms`.
 var (
@@ -86,18 +86,6 @@ var (
 	errNotNumber   = errors.New("is not a number")
 	errNotPositive = errors.New("must be positive")
 )
-
-// positive rejects zero, for the settings where it would stop the plugin doing
-// anything: a poll interval of zero spins, and a title of no length is no title.
-func positive(value int) error {
-	if value <= 0 {
-		return errNotPositive
-	}
-	return nil
-}
-
-// text accepts whatever it is given: any string is a usable path.
-func text(raw string) (string, error) { return raw, nil }
 
 func boolean(raw string) (bool, error) {
 	value, err := strconv.ParseBool(raw)
@@ -107,21 +95,23 @@ func boolean(raw string) (bool, error) {
 	return value, nil
 }
 
-// number reads a count and holds it to valid.
-func number(valid validator) converter[int] {
-	return func(raw string) (int, error) {
-		value, err := strconv.Atoi(raw)
-		if err != nil {
-			return 0, errNotNumber
-		}
-		return value, valid(value)
+// count reads a number that must be positive. Zero would stop the plugin doing
+// anything: a poll interval of zero spins, and a title of no length is no title.
+func count(raw string) (int, error) {
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, errNotNumber
 	}
+	if value <= 0 {
+		return 0, errNotPositive
+	}
+	return value, nil
 }
 
 // milliseconds reads a duration written as a count of them, which is easier to
 // pass through a shell than "500ms".
 func milliseconds(raw string) (time.Duration, error) {
-	value, err := number(positive)(raw)
+	value, err := count(raw)
 	if err != nil {
 		return 0, err
 	}
