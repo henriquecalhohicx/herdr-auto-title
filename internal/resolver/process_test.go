@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"herdr-auto-title/internal/state"
+	"github.com/kryptamine/herdr-auto-title/internal/state"
 )
 
 // running builds a pane whose processes Herdr reports by name.

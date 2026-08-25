@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"herdr-auto-title/internal/herdr"
-	"herdr-auto-title/internal/state"
+	"github.com/kryptamine/herdr-auto-title/internal/herdr"
+	"github.com/kryptamine/herdr-auto-title/internal/state"
 )
 
 func TestAgentTitleBeatsEverySourceBelowIt(t *testing.T) {

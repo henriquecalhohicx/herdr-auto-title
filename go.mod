@@ -1,4 +1,4 @@
-module herdr-auto-title
+module github.com/kryptamine/herdr-auto-title
 
 go 1.24
 

@@ -13,7 +13,7 @@ import (
 
 	"github.com/rivo/uniseg"
 
-	"herdr-auto-title/internal/state"
+	"github.com/kryptamine/herdr-auto-title/internal/state"
 )
 
 // stubGit builds a Git source answering from a fixed table, so every outcome is

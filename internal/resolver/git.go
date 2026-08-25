@@ -10,7 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"herdr-auto-title/internal/state"
+	"github.com/kryptamine/herdr-auto-title/internal/state"
 )
 
 const (

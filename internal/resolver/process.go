@@ -3,7 +3,7 @@ package resolver
 import (
 	"strings"
 
-	"herdr-auto-title/internal/state"
+	"github.com/kryptamine/herdr-auto-title/internal/state"
 )
 
 // shellNames are the programs that run in a pane without being what the pane is

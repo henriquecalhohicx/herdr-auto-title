@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	"herdr-auto-title/internal/herdr"
+	"github.com/kryptamine/herdr-auto-title/internal/herdr"
 )
 
 // PaneState is one pane's context as Herdr reported it when it was last read.

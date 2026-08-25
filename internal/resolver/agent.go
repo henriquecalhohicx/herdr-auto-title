@@ -3,7 +3,7 @@ package resolver
 import (
 	"strings"
 
-	"herdr-auto-title/internal/state"
+	"github.com/kryptamine/herdr-auto-title/internal/state"
 )
 
 // Agent derives the activity from what the pane's agent says it is working on.

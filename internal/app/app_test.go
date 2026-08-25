@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"herdr-auto-title/internal/herdr"
-	"herdr-auto-title/internal/resolver"
+	"github.com/kryptamine/herdr-auto-title/internal/herdr"
+	"github.com/kryptamine/herdr-auto-title/internal/resolver"
 )
 
 const testPoll = 10 * time.Millisecond

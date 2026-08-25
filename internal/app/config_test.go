@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"herdr-auto-title/internal/resolver"
+	"github.com/kryptamine/herdr-auto-title/internal/resolver"
 )
 
 // isolate clears every variable Auto Title reads, so a test sees only what it

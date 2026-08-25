@@ -1,6 +1,6 @@
 package resolver
 
-import "herdr-auto-title/internal/state"
+import "github.com/kryptamine/herdr-auto-title/internal/state"
 
 // TerminalTitle derives the activity from the pane's terminal title.
 //

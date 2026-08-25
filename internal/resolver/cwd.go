@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"herdr-auto-title/internal/state"
+	"github.com/kryptamine/herdr-auto-title/internal/state"
 )
 
 // CWD derives the tab's context from the pane's working directory: the

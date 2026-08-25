@@ -20,16 +20,32 @@ Rename a tab yourself and Auto Title leaves it alone.
 
 ## Installation
 
-Auto Title needs Go 1.24 or newer to build.
-
 ```sh
-herdr plugin link /path/to/herdr-auto-title
+herdr plugin install kryptamine/herdr-auto-title
 ```
 
-Herdr builds the binary, launches it through its startup hook, and sets
-`HERDR_SOCKET_PATH` in the environment; Auto Title refuses to start without it.
+Herdr clones the repository, builds the binary and launches it through its
+startup hook. It is built from source at install time, so **Go 1.24 or newer has
+to be on the machine** — there is nothing else to install.
 
-To try it by hand in a Herdr pane, build and run it — the environment is already
+Add `--ref <tag>` to pin a version. `herdr plugin list` shows it once it is in,
+`herdr plugin disable` turns it off without removing it, and
+`herdr plugin uninstall` takes it out.
+
+Auto Title reads `HERDR_SOCKET_PATH` from the environment Herdr gives it and
+refuses to start without it, so it only runs as a plugin or from inside a Herdr
+pane.
+
+### From a checkout
+
+To work on it, link a clone instead of installing a copy:
+
+```sh
+git clone https://github.com/kryptamine/herdr-auto-title
+herdr plugin link herdr-auto-title
+```
+
+Or build and run it by hand in a Herdr pane, where the environment is already
 set for you:
 
 ```sh

@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"herdr-auto-title/internal/herdr"
+	"github.com/kryptamine/herdr-auto-title/internal/herdr"
 )
 
 // Changes remembers when each pane last changed.

@@ -13,9 +13,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"herdr-auto-title/internal/app"
-	"herdr-auto-title/internal/herdr"
-	"herdr-auto-title/internal/resolver"
+	"github.com/kryptamine/herdr-auto-title/internal/app"
+	"github.com/kryptamine/herdr-auto-title/internal/herdr"
+	"github.com/kryptamine/herdr-auto-title/internal/resolver"
 )
 
 func main() {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"herdr-auto-title/internal/state"
+	"github.com/kryptamine/herdr-auto-title/internal/state"
 )
 
 // sshPane builds a pane running the given ssh command line, beside the shell

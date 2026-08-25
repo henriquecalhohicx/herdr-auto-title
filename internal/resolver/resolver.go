@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"herdr-auto-title/internal/state"
+	"github.com/kryptamine/herdr-auto-title/internal/state"
 )
 
 // DefaultMaxLength bounds a generated title, in columns of the tab bar.

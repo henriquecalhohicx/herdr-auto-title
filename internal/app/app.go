@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"time"
 
-	"herdr-auto-title/internal/herdr"
-	"herdr-auto-title/internal/resolver"
-	"herdr-auto-title/internal/state"
+	"github.com/kryptamine/herdr-auto-title/internal/herdr"
+	"github.com/kryptamine/herdr-auto-title/internal/resolver"
+	"github.com/kryptamine/herdr-auto-title/internal/state"
 )
 
 // pollTimeout bounds one poll: a snapshot and the renames it decides on.

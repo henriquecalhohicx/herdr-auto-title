@@ -3,7 +3,7 @@ package resolver
 import (
 	"strings"
 
-	"herdr-auto-title/internal/state"
+	"github.com/kryptamine/herdr-auto-title/internal/state"
 )
 
 const (

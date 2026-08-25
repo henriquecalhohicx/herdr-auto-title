@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"herdr-auto-title/internal/state"
+	"github.com/kryptamine/herdr-auto-title/internal/state"
 )
 
 // tabWithCWD builds a one-pane tab whose pane sits in dir.

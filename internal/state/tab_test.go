@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"herdr-auto-title/internal/herdr"
+	"github.com/kryptamine/herdr-auto-title/internal/herdr"
 )
 
 func TestSelectContextPanePrefersFocused(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"herdr-auto-title/internal/herdr"
+	"github.com/kryptamine/herdr-auto-title/internal/herdr"
 )
 
 func pane(paneID string, revision uint64) herdr.PaneInfo {

@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"herdr-auto-title/internal/resolver"
-	"herdr-auto-title/internal/state"
+	"github.com/kryptamine/herdr-auto-title/internal/resolver"
+	"github.com/kryptamine/herdr-auto-title/internal/state"
 )
 
 // Environment variables Auto Title reads. V1 has no configuration file.
