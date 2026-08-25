@@ -10,8 +10,8 @@ generated: { by: claude-code/opus-5, at: 2026-08-25T12:46:22+03:00 }
 # Sanitizing Untrusted Values
 
 Every candidate for a title — a directory name, a terminal title, an agent
-title, a branch — originates in terminal output or in a path someone chose. All
-of it is treated as untrusted input.
+title, an ssh destination — originates in terminal output or in a path someone
+chose. All of it is treated as untrusted input.
 
 The one rule that is never bent: **nothing derived from terminal output is
 passed to a shell.** Renames go over the socket API, and `git` is executed with
@@ -72,15 +72,10 @@ count is not that.
 
 `splitAtWidth` walks grapheme clusters and sums their widths
 (`github.com/rivo/uniseg`, the project's only dependency), so a cluster is kept
-whole or left out. `HERDR_AUTO_TITLE_MAX_LENGTH` and
-`HERDR_AUTO_TITLE_BRANCH_MAX` are therefore both counted in columns; for ASCII
-the two units are the same number, which is why the defaults did not change when
-this did.
+whole or left out. `HERDR_AUTO_TITLE_MAX_LENGTH` is therefore counted in
+columns; for ASCII the two units are the same number, which is why the default
+did not change when this did.
 
 Truncation also leaves no dangling separator behind: a title cut mid-structure
 says a part was lost without saying which, so `abcdefg › hij` cut at nine
 columns is `abcdefg`, not `abcdefg ›`.
-
-The same arithmetic governs how much of a git branch may reach a title
-(`cutAtSeparator` in `internal/resolver/git.go`), which is why that limit is
-stated in columns too.

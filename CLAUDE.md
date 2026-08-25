@@ -108,6 +108,9 @@ listed here** (`make probe-*`, `scripts/probe.py`).
   one tab has not been probed.
 - `tab.rename` costs 0.16 ms median and 0.21 ms at p95 over forty calls —
   cheaper than the snapshot that precedes it.
+- **A tab label is one line.** `tab.rename` accepts a newline and stores it
+  verbatim — no error, no stripping — but the tab bar renders a single line, so
+  a two-line label is not available. Herdr exposes no tab-bar height setting.
 - `PaneInfo` carries no foreground process name; that needs `pane.process_info`,
   one request per pane at 0.11 ms — cheaper than the snapshot. Its
   `foreground_processes` lists the pane's foreground process *and its

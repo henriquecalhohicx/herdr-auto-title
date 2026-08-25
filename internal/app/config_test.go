@@ -12,7 +12,7 @@ import (
 // sets and the environment the tests run in cannot change the outcome.
 func isolate(t *testing.T) {
 	t.Helper()
-	for _, name := range []string{EnvDebug, EnvPoll, EnvMaxLength, EnvBranchMax, EnvManual} {
+	for _, name := range []string{EnvDebug, EnvPoll, EnvMaxLength, EnvManual} {
 		t.Setenv(name, "")
 	}
 }
@@ -26,9 +26,6 @@ func TestLoadConfigDefaults(t *testing.T) {
 	}
 	if cfg.Debug {
 		t.Error("debug is on by default")
-	}
-	if cfg.BranchMax != resolver.DefaultBranchMaxLength {
-		t.Errorf("branch max = %d, want %d", cfg.BranchMax, resolver.DefaultBranchMaxLength)
 	}
 	if cfg.Poll != DefaultPoll {
 		t.Errorf("poll = %s, want %s", cfg.Poll, DefaultPoll)
@@ -81,39 +78,20 @@ func TestLoadConfigKeepsDefaultsOnBadValues(t *testing.T) {
 	}
 }
 
-func TestTheTwoLimitsDifferOnZero(t *testing.T) {
-	// The whole reason there are two validators. A branch limit of zero is how
-	// branches are turned off; a title of no length is nothing at all.
+func TestAnUnusableValueIsReportedInFull(t *testing.T) {
 	isolate(t)
-	t.Setenv(EnvBranchMax, "0")
 	t.Setenv(EnvMaxLength, "0")
 
 	cfg, warnings := LoadConfig()
-	if cfg.BranchMax != 0 {
-		t.Errorf("branch max = %d, want the zero that turns branches off", cfg.BranchMax)
-	}
 	if cfg.MaxLength != resolver.DefaultMaxLength {
 		t.Errorf("max length = %d, want the default %d", cfg.MaxLength, resolver.DefaultMaxLength)
-	}
-	if len(warnings) != 1 {
-		t.Errorf("warnings = %v, want one, for the title length alone", warnings)
-	}
-}
-
-func TestANegativeBranchLimitIsRejected(t *testing.T) {
-	isolate(t)
-	t.Setenv(EnvBranchMax, "-1")
-
-	cfg, warnings := LoadConfig()
-	if cfg.BranchMax != resolver.DefaultBranchMaxLength {
-		t.Errorf("branch max = %d, want the default %d", cfg.BranchMax, resolver.DefaultBranchMaxLength)
 	}
 	if len(warnings) != 1 {
 		t.Fatalf("warnings = %v, want one", warnings)
 	}
 	// The warning has to say which variable, what was in it, and what is being
 	// used instead — it is all the user gets.
-	for _, want := range []string{EnvBranchMax, `"-1"`, "cannot be negative", "12"} {
+	for _, want := range []string{EnvMaxLength, `"0"`, "must be positive", "64"} {
 		if !strings.Contains(warnings[0], want) {
 			t.Errorf("warning %q does not mention %q", warnings[0], want)
 		}

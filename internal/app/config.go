@@ -16,7 +16,6 @@ const (
 	EnvDebug     = "HERDR_AUTO_TITLE_DEBUG"
 	EnvPoll      = "HERDR_AUTO_TITLE_POLL_MS"
 	EnvMaxLength = "HERDR_AUTO_TITLE_MAX_LENGTH"
-	EnvBranchMax = "HERDR_AUTO_TITLE_BRANCH_MAX"
 	EnvManual    = "HERDR_AUTO_TITLE_MANUAL_FILE"
 )
 
@@ -31,12 +30,9 @@ const DefaultPoll = 500 * time.Millisecond
 type Config struct {
 	Debug bool
 	Poll  time.Duration
-	// MaxLength and BranchMax are measured in columns of the tab bar rather
-	// than in characters: a CJK character or an emoji takes two.
+	// MaxLength is measured in columns of the tab bar rather than in
+	// characters: a CJK character or an emoji takes two.
 	MaxLength int
-	// BranchMax bounds what a git branch may add to a title. Zero leaves
-	// branches out of titles entirely.
-	BranchMax int
 	// ManualPath is where tabs the user renamed by hand are remembered across
 	// restarts. Empty keeps them in memory only.
 	ManualPath string
@@ -49,7 +45,6 @@ func LoadConfig() (Config, []string) {
 	cfg := Config{
 		Poll:       DefaultPoll,
 		MaxLength:  resolver.DefaultMaxLength,
-		BranchMax:  resolver.DefaultBranchMaxLength,
 		ManualPath: state.DefaultManualPath(),
 	}
 	var warnings []string
@@ -57,8 +52,6 @@ func LoadConfig() (Config, []string) {
 	cfg.Debug = read(&warnings, EnvDebug, cfg.Debug, boolean)
 	cfg.Poll = read(&warnings, EnvPoll, cfg.Poll, milliseconds)
 	cfg.MaxLength = read(&warnings, EnvMaxLength, cfg.MaxLength, number(positive))
-	// Zero is meaningful here: it leaves branches out of titles.
-	cfg.BranchMax = read(&warnings, EnvBranchMax, cfg.BranchMax, number(nonNegative))
 	cfg.ManualPath = read(&warnings, EnvManual, cfg.ManualPath, text)
 
 	return cfg, warnings
@@ -98,7 +91,6 @@ var (
 	errNotBoolean  = errors.New("is not a boolean")
 	errNotNumber   = errors.New("is not a number")
 	errNotPositive = errors.New("must be positive")
-	errNegative    = errors.New("cannot be negative")
 )
 
 // positive rejects zero, for the settings where it would stop the plugin doing
@@ -106,14 +98,6 @@ var (
 func positive(value int) error {
 	if value <= 0 {
 		return errNotPositive
-	}
-	return nil
-}
-
-// nonNegative allows zero, for the settings where it means "none of this".
-func nonNegative(value int) error {
-	if value < 0 {
-		return errNegative
 	}
 	return nil
 }

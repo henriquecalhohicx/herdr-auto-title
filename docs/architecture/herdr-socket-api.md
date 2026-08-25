@@ -48,6 +48,11 @@ Three, and no others (`internal/herdr/session.go`):
   0.21 ms at p95 over forty calls, against 0.99 ms for the `session.snapshot`
   preceding them. Renaming is not what limits anything.
 
+A label is **one line**. `tab.rename` accepts a newline and stores it verbatim,
+with no error and no stripping, but the tab bar renders a single line and Herdr
+exposes no setting for its height. Anything a title has to say fits on one row
+or does not get said.
+
 `tab.get` and `pane.get` read one object each, and `pane.list` filters by
 workspace only, never by tab. None of them is needed while the snapshot is one
 call.

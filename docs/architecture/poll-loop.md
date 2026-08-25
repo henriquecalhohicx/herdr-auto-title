@@ -129,6 +129,5 @@ as soon as the socket appeared.
 debounce timers to cancel and no socket to close, because a connection never
 outlives the call that made it.
 
-The one thing that can still be in flight is a background git lookup, which is
-bounded by its own timeout — see
-[title resolution](./title-resolution.md#git-runs-outside-the-loop).
+Every source resolves synchronously inside the poll, so when `Run` returns there
+is nothing left running.

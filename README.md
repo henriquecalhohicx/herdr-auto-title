@@ -9,7 +9,6 @@ Python runtime, no database, no external service, and no LLM.
 
 ```
 ~/work/dashboard                                →  dashboard
-~/work/dashboard on branch feature/MC-13200     →  dashboard › MC-13200
 nvim editing auth.provider.ts                   →  nvim › auth.provider.ts
 an agent working on OAuth scopes                →  dashboard › claude › Implement OAuth scopes
 ssh into prod-01                                →  ssh › prod-01
@@ -62,8 +61,7 @@ The **activity** is the first of these that has something to say:
 
 1. what an agent reports it is working on;
 2. the terminal title, if it says more than where you are;
-3. the program running in the pane, when it is the only one — `nvim`, `psql`;
-4. the git branch, when nothing above spoke.
+3. the program running in the pane, when it is the only one — `nvim`, `psql`.
 
 The **context** is the directory you are in, or the machine you reached over
 `ssh`. Either half can come from a different source than the other, so an agent
@@ -73,9 +71,6 @@ A few rules are worth knowing because they explain a title that surprised you:
 
 - **Your workspace name is not repeated.** Herdr shows it above the tabs
   already, so in a workspace called `dashboard` a tab reads `nvim › auth.ts`.
-- **Branches are shortened to what identifies the work.** An issue key wins
-  (`bugfix-asa-cpanel-uapi-mc-13675` → `MC-13675`); otherwise the beginning is
-  kept and cut at a whole word. `main` and `master` contribute nothing.
 - **Paths, prompts and program names are dropped.** `auth.ts (~/work/src) - Nvim`
   becomes `auth.ts - Nvim`; `root@psi:` and a bare `zsh` say nothing a tab
   needs.
@@ -88,7 +83,7 @@ Why each of those is the way it is: [docs/architecture](docs/architecture/).
 
 ## Configuration
 
-There is no configuration file. Five environment variables are read at startup;
+There is no configuration file. Four environment variables are read at startup;
 an unusable value is logged as a warning and the default is kept, so a typo
 never stops the plugin from running.
 
@@ -97,7 +92,6 @@ never stops the plugin from running.
 | `HERDR_AUTO_TITLE_DEBUG` | `false` | Log at DEBUG instead of INFO |
 | `HERDR_AUTO_TITLE_POLL_MS` | `500` | How often the session is read; also the fastest a tab can be renamed |
 | `HERDR_AUTO_TITLE_MAX_LENGTH` | `64` | Maximum title width in tab-bar columns; CJK and emoji take two each |
-| `HERDR_AUTO_TITLE_BRANCH_MAX` | `12` | Most a git branch may add to a title, in columns; `0` leaves branches out |
 | `HERDR_AUTO_TITLE_MANUAL_FILE` | `<config>/herdr-auto-title/manual-names.json` | Where tabs you renamed by hand are remembered |
 
 Auto Title logs to stderr through `log/slog`. Raw terminal output and command

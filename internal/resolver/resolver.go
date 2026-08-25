@@ -30,7 +30,6 @@ const GenericFallback = "Shell"
 const (
 	ConfidenceFallback      = 10
 	ConfidenceCWD           = 30
-	ConfidenceGit           = 40
 	ConfidenceSSH           = 60
 	ConfidenceProcess       = 70
 	ConfidenceTerminalTitle = 80
@@ -98,15 +97,12 @@ func New(maxLength int, sources ...Source) *Deterministic {
 // Later tickets add their sources here, so the binary and the tests can never
 // drift apart on what the chain contains. The order below is the ladder's, but
 // only for reading — New sorts by confidence regardless.
-//
-// branchMax bounds what a git branch may contribute; zero leaves branches out.
-func Default(maxLength, branchMax int) *Deterministic {
+func Default(maxLength int) *Deterministic {
 	return New(maxLength,
 		NewAgent(),
 		NewTerminalTitle(),
 		NewProcess(),
 		NewSSH(),
-		NewGit(branchMax),
 		NewCWD(),
 	)
 }

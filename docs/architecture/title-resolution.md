@@ -52,7 +52,6 @@ rather than by the order the sources happen to be listed in
 | 80 | Terminal title | `terminal.go` | Activity |
 | 70 | Foreground process | `process.go` | Activity |
 | 60 | SSH session | `ssh.go` | Context (and Activity when bare) |
-| 40 | Git branch | `git.go` | Activity |
 | 30 | Working directory | `cwd.go` | Context |
 | 10 | Generic fallback | `resolver.go` | the whole name (`Shell`) |
 
@@ -126,51 +125,33 @@ than guessed at, so `ssh -p 2222 prod-01` and
 `ssh prod-01 tail -f /var/log/syslog` both yield `prod-01`. A destination that
 cannot be read still marks the tab remote, as `dashboard › SSH`.
 
-### Git
+### The git branch, and why it is gone
 
-Inside a repository the branch becomes the activity, so a tab reads
-`dashboard › MC-13200`. Branch names are far too long to use whole — the ones
-this was calibrated against averaged fifty characters and reached ninety — and
-**branch conventions vary too much to enumerate**, so nothing here is a list of
-known prefixes. A list only ever fits the team it was written for. Two rules
-reduce any convention:
+A source at confidence 40 read the branch checked out in the pane's directory
+and put it in the activity slot, so a tab read `dashboard › MC-13675`.
 
-| Branch | Contributes |
-|--------|-------------|
-| `bugfix-asatretdinov-cpanel-uapi-body-arguments-mc-13675` | `MC-13675` |
-| `bugfix-MC-12722-sql-injection-operations-summary` | `MC-12722` |
-| `feature/MC-13200` | `MC-13200` |
-| `refactor-the-poller` | `refactor-the` |
-| `alex/oauth-scopes` | `oauth-scopes` |
-| `main`, `master` | nothing |
+It was removed. Sitting below the terminal title it only ever spoke for a plain
+shell in a repository, and in that spot the choice was between a tab called
+`dashboard` and one called `dashboard › <something from a branch name>`.
+Measured against a realistic corpus, that something was worth having only when
+the branch carried a tracker key:
 
-**An issue key wins outright.** It identifies the work, it is short, and it
-survives whatever a convention wraps around it — a team whose branches all begin
-`bugfix-<author>-` gets eight characters that distinguish rather than eight that
-do not. **Otherwise the beginning is kept and cut at a separator**, so the result
-ends on a whole word, and any namespace is dropped since every branch in the
-repository carries the same one. The trunk contributes nothing: a tab in a
-repository it is already named after learns nothing from being told it is on
-`main`.
+```
+bugfix-asatretdinov-…-mc-13675  ->  MC-13675      identifies the work
+fix/filter-sentry-errors-…      ->  filter        a fragment, worse than nothing
+feature/add-dark-mode           ->  add-dark      a fragment
+hotfix-login-500                ->  LOGIN-500     reads as a ticket, is not one
+sprint-42-cleanup               ->  SPRINT-42     reads as a ticket, is not one
+develop                         ->  develop       says nothing, on every tab
+```
 
-#### Git runs outside the loop
+Every other source in the resolver declines when nothing useful survives. This
+one guessed instead, and the guesses were noise on tabs that would otherwise
+have been quietly correct. Keeping only the tracker-key rule was considered and
+turned down as well: it would have meant a source that fires for teams with one
+naming convention and never for anyone else.
 
-The lookup never runs in the poll loop. `Git.Resolve` answers from a cache and,
-when a reading is missing or older than `GitTTL` (3 s), starts a background
-refresh that the next poll picks up. A directory therefore contributes no branch
-on the poll that first sees it, and its branch from then on. A stale reading is
-used while the refresh runs, so a checkout takes a moment to show rather than
-making the tab flicker back to its bare directory name.
-
-The cache is the one piece of state not rebuilt from each snapshot — it is keyed
-by directory, not by anything the session lists — so it prunes itself: a reading
-that has aged well past the TTL belongs to a pane that has moved on, because a
-directory still in use is asked about on every poll.
-
-`git` is executed directly with arguments, never through a shell, with
-`GIT_OPTIONAL_LOCKS=0` and `GIT_TERMINAL_PROMPT=0` and a 2 s timeout. No
-repository, a detached HEAD, a missing `git` and a timed-out lookup are all
-simply "no branch".
+The whole thing lives in the git history if the trade ever looks different.
 
 ### Working directory and the fallback
 

@@ -15,7 +15,7 @@ import (
 const testPoll = 10 * time.Millisecond
 
 func testConfig() Config {
-	return Config{Poll: testPoll, MaxLength: resolver.DefaultMaxLength, BranchMax: resolver.DefaultBranchMaxLength}
+	return Config{Poll: testPoll, MaxLength: resolver.DefaultMaxLength}
 }
 
 func discardLogger() *slog.Logger {
@@ -43,7 +43,7 @@ func start(t *testing.T, tabs []herdr.TabInfo, panes []herdr.PaneInfo) *harness 
 func startWith(t *testing.T, client *herdr.StubClient) *harness {
 	t.Helper()
 
-	app := New(testConfig(), discardLogger(), resolver.Default(resolver.DefaultMaxLength, resolver.DefaultBranchMaxLength))
+	app := New(testConfig(), discardLogger(), resolver.Default(resolver.DefaultMaxLength))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	h := &harness{t: t, client: client, done: make(chan error, 1), cancel: cancel}
@@ -377,7 +377,7 @@ func TestAPaneWhoseProcessesCannotBeReadIsStillNamed(t *testing.T) {
 		[]herdr.PaneInfo{{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true}},
 	)
 
-	app := New(testConfig(), discardLogger(), resolver.Default(resolver.DefaultMaxLength, resolver.DefaultBranchMaxLength))
+	app := New(testConfig(), discardLogger(), resolver.Default(resolver.DefaultMaxLength))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
