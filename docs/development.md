@@ -22,6 +22,11 @@ need the outer two.
 make test        # go test -race ./...
 make test-v      # the same, verbose
 make check       # fmt + vet + lint + test, run this before every commit
+
+The same four run in CI on every push and pull request
+(`.github/workflows/ci.yml`), plus two things a laptop does not cover: the Go
+version floor the manifest promises, and macOS and Windows, which the manifest
+claims and nobody had ever run.
 ```
 
 The suite drives the whole loop through `herdr.StubClient`: the first poll, a
