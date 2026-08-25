@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -19,6 +20,15 @@ func testConfig() Config {
 
 func discardLogger() *slog.Logger {
 	return slog.New(slog.DiscardHandler)
+}
+
+// testResolver builds the shipped chain against a home directory of the test's
+// own, because CWD declines a pane sitting in the user's and the fixtures below
+// must not depend on whose machine they run on.
+func testResolver(t *testing.T) resolver.TitleResolver {
+	t.Helper()
+	t.Setenv("HOME", filepath.Join(t.TempDir(), "home"))
+	return resolver.Default(resolver.DefaultMaxLength)
 }
 
 // harness runs an App against a stubbed Herdr session.
@@ -41,7 +51,7 @@ func start(t *testing.T, tabs []herdr.TabInfo, panes []herdr.PaneInfo) *harness 
 func startWith(t *testing.T, client *herdr.StubClient) *harness {
 	t.Helper()
 
-	app := New(testConfig(), discardLogger(), resolver.Default(resolver.DefaultMaxLength))
+	app := New(testConfig(), discardLogger(), testResolver(t))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	h := &harness{t: t, client: client, done: make(chan struct{}), cancel: cancel}
@@ -374,7 +384,7 @@ func TestAPaneWhoseProcessesCannotBeReadIsStillNamed(t *testing.T) {
 		[]herdr.PaneInfo{{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true}},
 	)
 
-	app := New(testConfig(), discardLogger(), resolver.Default(resolver.DefaultMaxLength))
+	app := New(testConfig(), discardLogger(), testResolver(t))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan struct{})
