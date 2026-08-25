@@ -25,7 +25,7 @@ func TestTheKindQualifiesTheTitle(t *testing.T) {
 	}
 
 	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
-	if want := "dashboard · nvim:auth.provider.ts"; got.Name != want {
+	if want := "dashboard · nvim › auth.provider.ts"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 }
@@ -87,7 +87,7 @@ func TestOnlyALoneProcessNamesAPane(t *testing.T) {
 
 func TestARemoteSessionIsNotNamedTwice(t *testing.T) {
 	// ssh is marked on the host, where the mark cannot be outranked. Repeating
-	// it in the activity would read `ssh:prod-01 · ssh`.
+	// it in the activity would read `ssh › prod-01 · ssh`.
 	pane := &state.PaneState{
 		CWD:       "/Users/dev/work/dashboard",
 		Processes: []state.Process{{Name: "ssh", Args: []string{"ssh", "prod-01"}}},
@@ -96,8 +96,8 @@ func TestARemoteSessionIsNotNamedTwice(t *testing.T) {
 	if got := paneKind(pane); got != "" {
 		t.Errorf("paneKind = %q, want empty", got)
 	}
-	if got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane)); got.Name != "ssh:prod-01" {
-		t.Errorf("name = %q, want ssh:prod-01", got.Name)
+	if got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane)); got.Name != "ssh › prod-01" {
+		t.Errorf("name = %q, want ssh › prod-01", got.Name)
 	}
 }
 
@@ -154,7 +154,7 @@ func TestAnAgentIsItsOwnKind(t *testing.T) {
 		t.Errorf("paneKind = %q, want claude", got)
 	}
 	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
-	if want := "dashboard · claude:Git email configuration"; got.Name != want {
+	if want := "dashboard · claude › Git email configuration"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 }

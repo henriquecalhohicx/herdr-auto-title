@@ -300,7 +300,7 @@ func TestAgentContextNamesTheTab(t *testing.T) {
 		}},
 	)
 
-	if want := "dashboard · claude:Implement OAuth scopes"; h.awaitRenames(1)[0].Label != want {
+	if want := "dashboard · claude › Implement OAuth scopes"; h.awaitRenames(1)[0].Label != want {
 		t.Errorf("rename = %q, want %q", h.awaitRenames(1)[0].Label, want)
 	}
 }
@@ -320,7 +320,7 @@ func TestARemoteSessionIsNamedAfterItsHost(t *testing.T) {
 	)
 
 	renames := h.awaitRenames(2)
-	if want := "ssh:prod-01"; renames[1].Label != want {
+	if want := "ssh › prod-01"; renames[1].Label != want {
 		t.Errorf("rename = %q, want %q", renames[1].Label, want)
 	}
 }

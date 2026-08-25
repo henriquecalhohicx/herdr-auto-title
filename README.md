@@ -134,9 +134,11 @@ field when an agent does set it; in practice most agent context arrives one rung
 lower, through the terminal title.
 
 Two separators, and they mean different things. A middle dot separates where
-from what: `self-care-portal · yarn dev`. A colon binds a kind of thing to the
-particular one: `nvim:auth.provider.ts`. A project name never takes a colon,
-because a project is a place rather than a kind.
+from what: `self-care-portal · yarn dev`. An angle binds a kind of thing to the
+particular one, reading as nesting: `nvim › auth.provider.ts`. A project never
+takes an angle, because a project is a place rather than a kind. The two are
+deliberately different weights, so a title carrying both stays legible:
+`self-care-portal · nvim › auth.provider.ts`.
 
 An agent is asked for first, because Herdr recognizes it directly and its
 process list does not — a coding agent shows up as a `caffeinate`, several
@@ -146,14 +148,15 @@ an editor reports as `nvim`, while a build tool reports as `esbuild` and five
 `node`s. Picking one of those would be guesswork, and such a pane already has a
 terminal title saying what it is doing. A kind that has nothing to add stands alone —
 `dashboard · nvim` for an editor with no file open — and a title that already
-carries its program's name loses it, since `nvim:auth.provider.ts - Nvim` says
+carries its program's name loses it, since `nvim › auth.provider.ts - Nvim` says
 the same thing twice.
 
 A pane running `ssh` is named after the machine it reached, not the directory it
-was launched from: `ssh:prod-01`, and `ssh:prod-01 · Restart the queue workers`
-once the remote shell has something to report.
+was launched from: `ssh › prod-01`, and
+`ssh › prod-01 · Restart the queue workers` once the remote shell has something
+to report.
 
-The `ssh:` mark goes on the host rather than into the activity slot, because the
+The `ssh ›` mark goes on the host rather than into the activity slot, because the
 activity is contested — a remote shell sets a terminal title, that title outranks
 anything this source could put there, and the tab would stop saying it is remote
 at exactly the moment it has most to say. Nothing else names a machine, so the
@@ -202,12 +205,12 @@ are all simply "no branch".
 An agent that has not decided on a topic yet titles its window after itself, so
 `Claude Code` is generic as an activity and exactly right as a kind: the tab
 reads `dashboard · claude` until there is something to report, then
-`dashboard · claude:Implement OAuth scopes`.
+`dashboard · claude › Implement OAuth scopes`.
 
 Herdr shows the workspace above its tabs, so a tab in the workspace it is named
 after spends half its width repeating what is already on screen. That half is
-dropped: in a workspace called `dashboard`, a tab reads `nvim:auth.ts` rather
-than `dashboard · nvim:auth.ts`. It is dropped only when something else remains
+dropped: in a workspace called `dashboard`, a tab reads `nvim › auth.ts` rather
+than `dashboard · nvim › auth.ts`. It is dropped only when something else remains
 — a tab reduced to nothing has lost more than it saved — and only on an exact
 match, so a tab whose directory has left its workspace behind is exactly the one
 that keeps saying where it is.

@@ -17,7 +17,7 @@ func TestAgentTitleBeatsEverySourceBelowIt(t *testing.T) {
 		AgentTitle:    "Implement OAuth scopes",
 	}))
 
-	if want := "dashboard · claude:Implement OAuth scopes"; got.Name != want {
+	if want := "dashboard · claude › Implement OAuth scopes"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 	if got.Reason != "agent" {
@@ -37,7 +37,7 @@ func TestAgentTitleOutranksAMeaningfulTerminalTitle(t *testing.T) {
 		AgentTitle:    "Implement OAuth scopes",
 	}))
 
-	if want := "dashboard · claude:Implement OAuth scopes"; got.Name != want {
+	if want := "dashboard · claude › Implement OAuth scopes"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 }
@@ -55,7 +55,7 @@ func TestGenericAgentNameFallsThrough(t *testing.T) {
 				AgentTitle:    title,
 			}))
 
-			if want := "dashboard · claude:Fix OAuth redirect"; got.Name != want {
+			if want := "dashboard · claude › Fix OAuth redirect"; got.Name != want {
 				t.Errorf("name = %q, want %q", got.Name, want)
 			}
 			if got.Reason != "terminal_title" {
@@ -116,7 +116,7 @@ func TestAgentTitleWithNoDirectoryStandsAlone(t *testing.T) {
 		AgentTitle:  "Implement OAuth scopes",
 	}))
 
-	if want := "claude:Implement OAuth scopes"; got.Name != want {
+	if want := "claude › Implement OAuth scopes"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 }
@@ -143,7 +143,7 @@ func TestContextAndActivityComeFromTheSamePane(t *testing.T) {
 	}
 
 	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tab)
-	if want := "dashboard · claude:Implement OAuth scopes"; got.Name != want {
+	if want := "dashboard · claude › Implement OAuth scopes"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 }

@@ -11,6 +11,10 @@ const Separator = " · "
 
 const separatorRune = "·"
 
+// trimmable are the characters a title must not start or end on: a separator
+// left dangling by truncation says a part was lost without saying which.
+const trimmable = " " + separatorRune + kindSeparatorRune
+
 var (
 	// ansiRe matches CSI sequences, OSC strings and single-character escapes.
 	ansiRe = regexp.MustCompile(
@@ -45,7 +49,7 @@ func Sanitize(s string, maxLen int) string {
 	s = spaceRe.ReplaceAllString(s, " ")
 	s = sepRunRe.ReplaceAllString(s, separatorRune)
 	s = sepSpacingRe.ReplaceAllString(s, Separator)
-	s = strings.Trim(s, " "+separatorRune)
+	s = strings.Trim(s, trimmable)
 	s = strings.TrimSpace(s)
 
 	return truncate(s, maxLen)
@@ -61,7 +65,7 @@ func truncate(s string, maxLen int) string {
 	if len(runes) <= maxLen {
 		return s
 	}
-	cut := strings.TrimRight(string(runes[:maxLen]), " "+separatorRune)
+	cut := strings.TrimRight(string(runes[:maxLen]), trimmable)
 	return strings.TrimSpace(cut)
 }
 

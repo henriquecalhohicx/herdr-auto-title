@@ -63,7 +63,7 @@ func TestTheTabIsNamedAfterTheMarkedHost(t *testing.T) {
 	pane := sshPane("/Users/dev/work/dashboard", "ssh", "root@prod-01")
 
 	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
-	if want := "ssh:prod-01"; got.Name != want {
+	if want := "ssh › prod-01"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 	if got.Reason != "ssh" {
@@ -78,8 +78,8 @@ func TestTheHostOutranksTheWorkingDirectory(t *testing.T) {
 	// The local directory of a pane running ssh describes the wrong machine.
 	pane := sshPane("/Users/dev/work/dashboard", "ssh", "prod-01")
 
-	if got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane)); got.Name != "ssh:prod-01" {
-		t.Errorf("name = %q, want %q", got.Name, "ssh:prod-01")
+	if got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane)); got.Name != "ssh › prod-01" {
+		t.Errorf("name = %q, want %q", got.Name, "ssh › prod-01")
 	}
 }
 
@@ -122,8 +122,8 @@ func TestSSHIsFoundAmongOtherProcesses(t *testing.T) {
 		},
 	}
 
-	if got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane)); got.Name != "ssh:prod-01" {
-		t.Errorf("name = %q, want %q", got.Name, "ssh:prod-01")
+	if got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane)); got.Name != "ssh › prod-01" {
+		t.Errorf("name = %q, want %q", got.Name, "ssh › prod-01")
 	}
 }
 
@@ -135,7 +135,7 @@ func TestTheMarkSurvivesARemoteTitle(t *testing.T) {
 	pane.TerminalTitle = "Restart the queue workers"
 
 	got := titleResolver(DefaultMaxLength).Resolve(context.Background(), tabWithPane(pane))
-	if want := "ssh:prod-01 · Restart the queue workers"; got.Name != want {
+	if want := "ssh › prod-01 · Restart the queue workers"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 }
@@ -154,7 +154,7 @@ func TestHostsFromArgvAreSanitized(t *testing.T) {
 	if strings.ContainsRune(got.Name, '\x1b') {
 		t.Errorf("name = %q, still carries an escape", got.Name)
 	}
-	if want := "ssh:prod-01"; got.Name != want {
+	if want := "ssh › prod-01"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
 }
