@@ -81,13 +81,14 @@ func stripKind(detail, kind string) string {
 		return trimmed
 	}
 
-	lower, lowerKind := strings.ToLower(trimmed), strings.ToLower(kind)
+	// Compared fold-wise rather than through a lower-cased copy: lower-casing
+	// can change how many bytes a character takes, and the cut is by bytes.
 	switch {
-	case lower == lowerKind:
+	case strings.EqualFold(trimmed, kind):
 		return ""
-	case strings.HasSuffix(lower, lowerKind):
+	case len(trimmed) > len(kind) && strings.EqualFold(trimmed[len(trimmed)-len(kind):], kind):
 		trimmed = trimmed[:len(trimmed)-len(kind)]
-	case strings.HasPrefix(lower, lowerKind):
+	case len(trimmed) > len(kind) && strings.EqualFold(trimmed[:len(kind)], kind):
 		trimmed = trimmed[len(kind):]
 	}
 	return strings.Trim(trimmed, " -–—|:"+separatorRune)
