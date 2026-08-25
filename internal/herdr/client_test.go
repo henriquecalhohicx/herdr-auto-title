@@ -149,7 +149,7 @@ func TestEachCallUsesItsOwnConnection(t *testing.T) {
 
 	// Herdr closes the connection after answering, so a reused connection would
 	// fail on the second call.
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := client.Call(context.Background(), MethodSessionSnapshot, nil, nil); err != nil {
 			t.Fatalf("call %d: %v", i, err)
 		}

@@ -97,7 +97,7 @@ func TestResolveIsDeterministic(t *testing.T) {
 
 	first := r.Resolve(tab)
 	// Map iteration order varies between runs; the decision must not.
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		if got := r.Resolve(tab); got != first {
 			t.Fatalf("resolution %d = %+v, want %+v", i, got, first)
 		}

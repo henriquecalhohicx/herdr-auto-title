@@ -154,7 +154,7 @@ func (c *collected) credit(source Source) {
 	c.confidence = source.Confidence()
 }
 
-func (c collected) complete() bool {
+func (c *collected) complete() bool {
 	return c.parts.Context != "" && c.parts.Activity != ""
 }
 

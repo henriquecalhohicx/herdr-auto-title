@@ -121,7 +121,7 @@ func hostOf(destination string) string {
 	// A bare colon is a port; a host with several is an unbracketed IPv6
 	// literal, which has no port to strip.
 	if strings.Count(host, ":") == 1 {
-		host = host[:strings.Index(host, ":")]
+		host, _, _ = strings.Cut(host, ":")
 	}
 	return host
 }

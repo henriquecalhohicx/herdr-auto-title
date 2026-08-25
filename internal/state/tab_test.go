@@ -107,7 +107,7 @@ func TestSelectContextPaneBreaksTiesOnID(t *testing.T) {
 	}
 
 	// Map iteration order varies; the choice must not.
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		got := SelectContextPane(tab)
 		if got == nil || got.ID != "wE:p1" {
 			t.Fatalf("iteration %d selected %v, want wE:p1", i, got)

@@ -60,11 +60,11 @@ func TestChangesAreSafeUnderConcurrentUse(t *testing.T) {
 	c := NewChanges()
 	var wg sync.WaitGroup
 
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for n := 0; n < 200; n++ {
+			for n := range 200 {
 				c.Observe([]herdr.PaneInfo{pane("wE:p1", uint64(n))})
 				c.ChangedAt("wE:p1")
 			}

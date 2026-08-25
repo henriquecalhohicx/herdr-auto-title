@@ -2,6 +2,7 @@ package state
 
 import (
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -47,9 +48,7 @@ func LoadManual(path string) *Manual {
 	if json.Unmarshal(raw, &stored) != nil {
 		return m
 	}
-	for tabID, label := range stored.Locked {
-		m.locked[tabID] = label
-	}
+	maps.Copy(m.locked, stored.Locked)
 	return m
 }
 
