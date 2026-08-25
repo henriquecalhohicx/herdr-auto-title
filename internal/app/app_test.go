@@ -219,12 +219,15 @@ func TestATabClosingMidPollIsNotFatal(t *testing.T) {
 }
 
 func TestFailedRenameIsRetriedOnTheNextPoll(t *testing.T) {
-	h := start(t,
+	// Armed before the run starts: the loop names what it finds without waiting
+	// for a tick, so a stub armed afterwards races the very first poll.
+	client := herdr.NewStub(
 		[]herdr.TabInfo{{TabID: "wE:t1", Label: "1"}},
 		[]herdr.PaneInfo{{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true}},
 	)
+	client.SetRenameError(errors.New("herdr is busy"))
+	h := startWith(t, client)
 
-	h.client.SetRenameError(errors.New("herdr is busy"))
 	h.awaitPolls(3)
 	if renames := h.client.Renames(); len(renames) != 0 {
 		t.Fatalf("issued %v while renaming was failing", renames)
