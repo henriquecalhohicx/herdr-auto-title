@@ -1,10 +1,4 @@
 # Herdr Auto Title plugin manifest.
-#
-# Field names and constraints were taken from the manifest schema embedded in
-# Herdr 0.8.2: id, name, version and min_herdr_version are required,
-# min_herdr_version must be a semantic version, and platforms must be omitted
-# rather than left empty. Installing through `herdr plugin link` is verified in
-# the packaging slice.
 
 id = "herdr.auto-title"
 name = "Auto Title"
@@ -13,12 +7,10 @@ min_herdr_version = "0.8.2"
 description = "Automatically generates contextual tab titles"
 platforms = ["linux", "macos", "windows"]
 
-# Compile the standalone binary at install time. Go and the standard library
-# are the only requirements: no Node, Bun or Python runtime.
+# Built at install time; Go is the only requirement.
 [[build]]
 command = ["go", "build", "-o", "herdr-auto-title", "./cmd/herdr-auto-title"]
 
-# Herdr startup hooks are one-shot launch commands, not supervised daemons:
-# the process itself stays alive for the lifetime of the session.
+# A one-shot launch, not a supervised daemon: the process stays alive itself.
 [[startup]]
 command = ["./herdr-auto-title"]

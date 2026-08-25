@@ -1,9 +1,5 @@
 // Package state turns a Herdr session snapshot into the shape the resolver
-// names tabs from.
-//
-// Almost nothing is kept between polls. A snapshot describes the whole session
-// as it is right now, so each poll builds the tabs it needs and throws them
-// away again; the only thing carried forward is when each pane last changed.
+// names tabs from. Each poll builds what it needs and throws it away again.
 package state
 
 import (
@@ -25,28 +21,25 @@ type PaneState struct {
 	TerminalTitle    string
 	TerminalTitleRaw string
 
-	// Agent is the agent Herdr recognized in the pane, empty when there is
-	// none. AgentTitle is what that agent says it is working on; agents that
-	// report nothing leave it empty, and many express the same thing through
-	// the terminal title instead.
+	// Agent is the agent Herdr recognized, empty when there is none.
+	// AgentTitle is what it says it is working on, which many agents leave
+	// empty and report through the terminal title instead.
 	Agent        string
 	DisplayAgent string
 	AgentTitle   string
 	AgentStatus  string
 
-	// Processes are the commands running in the pane, as Herdr reports them:
-	// its foreground process and that process's descendants.
+	// Processes are the pane's foreground process and its descendants.
 	Processes []Process
 
 	Focused bool
-	// ChangedAt is when a poll last saw this pane's revision advance. Snapshots
-	// carry no timestamp, so this is the only ordering available when a tab
-	// holds several panes and none is focused.
+	// ChangedAt is when a poll last saw this pane's revision advance.
+	// Snapshots carry no timestamp, so it is the only ordering available.
 	ChangedAt time.Time
 }
 
-// Process is one command running in a pane. Args is its whole argument vector,
-// program name included, and may be empty when Herdr could not read it.
+// Process is one command running in a pane. Args is the whole argument vector,
+// program name included, and may be empty.
 type Process struct {
 	Name string
 	Args []string
@@ -86,9 +79,8 @@ func (p *PaneState) HasAgent() bool {
 	return p != nil && p.Agent != ""
 }
 
-// AgentIsActive reports whether the pane's agent is doing something the user
-// would want to see named: running, or waiting on them. An idle or finished
-// agent is no more interesting than any other pane.
+// AgentIsActive reports whether the pane's agent is running or waiting on the
+// user. An idle or finished one is no more interesting than any other pane.
 func (p *PaneState) AgentIsActive() bool {
 	if !p.HasAgent() {
 		return false
@@ -104,17 +96,13 @@ func (p *PaneState) AgentIsActive() bool {
 // TabState is one tab as it was last read: its current label and its panes.
 type TabState struct {
 	ID string
-	// CurrentName is the label the tab carries right now, which is what lets
-	// a poll skip a rename that would change nothing.
+	// CurrentName lets a poll skip a rename that would change nothing.
 	CurrentName string
-	// WorkspaceName is the label Herdr shows above this tab. A tab does not
-	// need to repeat what the workspace already says.
+	// WorkspaceName is the label Herdr shows above this tab.
 	WorkspaceName string
-	// DefaultName is the label Herdr gives a tab nobody has named: its place
-	// in its workspace, counted from one. A tab still carrying it has not been
-	// claimed by anyone. This is not TabInfo.number, which never repeats and
-	// runs far ahead of the tab count; the label follows the tabs and drops by
-	// one whenever a tab to the left of it closes.
+	// DefaultName is the label Herdr gives an unnamed tab: its place in the
+	// workspace, counted from one. Not TabInfo.number, which is a counter that
+	// never repeats — see docs/architecture/herdr-socket-api.md.
 	DefaultName string
 	Panes       map[string]*PaneState
 }
@@ -146,15 +134,9 @@ func (t TabState) SortedPanes() []*PaneState {
 	return panes
 }
 
-// SelectContextPane picks the pane that provides the tab's primary context.
-//
-// The order is: the focused pane, then the pane running an active agent, then
-// the pane that changed most recently. Exactly one pane is chosen and the title
-// is built from it alone, so two panes never blend into a name describing
-// neither.
-//
-// Ties break on the most recent change and then on pane ID, so identical state
-// always yields the same choice.
+// SelectContextPane picks the one pane a title is built from: the focused one,
+// then one running an active agent, then whichever changed last. Ties break on
+// pane ID, so identical state always yields the same choice.
 func SelectContextPane(tab TabState) *PaneState {
 	panes := tab.SortedPanes()
 	if len(panes) == 0 {
@@ -167,8 +149,7 @@ func SelectContextPane(tab TabState) *PaneState {
 		}
 	}
 
-	// A split where the user left an agent running is about that agent, even
-	// though the pane below it saw the last update.
+	// A split with an agent running is about that agent, whatever moved last.
 	if agent := mostRecent(filter(panes, (*PaneState).AgentIsActive)); agent != nil {
 		return agent
 	}
@@ -185,7 +166,7 @@ func filter(panes []*PaneState, keep func(*PaneState) bool) []*PaneState {
 	return kept
 }
 
-// mostRecent returns the last-changed pane of an ID-ordered slice. The strict
+// mostRecent returns the last-changed pane of an ID-ordered slice; the strict
 // comparison keeps the lowest ID when timestamps tie.
 func mostRecent(panes []*PaneState) *PaneState {
 	if len(panes) == 0 {

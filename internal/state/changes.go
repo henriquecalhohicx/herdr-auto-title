@@ -7,13 +7,9 @@ import (
 	"github.com/kryptamine/herdr-auto-title/internal/herdr"
 )
 
-// Changes remembers when each pane last changed.
-//
-// This is the one thing a snapshot cannot say. It reports what every pane holds
-// right now but not when that became true, and a tab with several panes and no
-// focus is named after whichever pane changed most recently. Herdr's pane
-// revisions are monotonic, so comparing one poll's revisions with the last
-// says which panes moved.
+// Changes remembers when each pane last changed — the one thing a snapshot
+// cannot say. Pane revisions are monotonic, so comparing one poll's with the
+// last says which panes moved.
 type Changes struct {
 	mu    sync.Mutex
 	panes map[string]paneChange

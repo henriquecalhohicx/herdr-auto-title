@@ -36,15 +36,9 @@ func New(cfg Config, log *slog.Logger, titles resolver.TitleResolver) *App {
 	}
 }
 
-// Run polls the session until the context is cancelled.
-//
-// Herdr does expose an event stream, and Auto Title deliberately does not use
-// it. Subscribing replays a backlog before delivering anything live — roughly
-// the last hundred revisions of every pane, about ten a second, so ten seconds
-// of history per active pane — and events.subscribe offers no cursor to skip
-// it. A subscriber therefore spends its first seconds reacting to a session
-// that no longer exists, while a snapshot always describes the present and
-// costs one request whatever the session holds.
+// Run polls the session until the context is cancelled. Herdr's event stream is
+// deliberately not used, and the measurements that settled that are in
+// docs/architecture/poll-loop.md.
 func (a *App) Run(ctx context.Context, client herdr.Client) error {
 	var failures failureLog
 
@@ -65,13 +59,9 @@ func (a *App) Run(ctx context.Context, client herdr.Client) error {
 	}
 }
 
-// attempt polls once and reports how it went, on the schedule failures keep.
-//
-// No poll failing is fatal, the first one included. Herdr may be busy, a tab
-// may have closed underneath the request, or Herdr may not be running at all —
-// its socket can be a moment behind the plugin it launched. Nothing is carried
-// between polls that a failure spoils, so the next tick simply tries again, and
-// polls keep their usual rate through an outage so that recovery is immediate.
+// attempt polls once and reports how it went, on the schedule failures keep. No
+// poll failing is fatal, the first one included: a plugin that gave up would
+// stay dead, and Herdr's socket can be a moment behind the process it launched.
 func (a *App) attempt(ctx context.Context, client herdr.Client, failures *failureLog) {
 	err := a.poll(ctx, client)
 	if ctx.Err() != nil {
@@ -88,12 +78,9 @@ func (a *App) attempt(ctx context.Context, client herdr.Client, failures *failur
 	}
 }
 
-// failureLog decides how often a run of failing polls is worth mentioning.
-//
-// Polls run twice a second, so logging every failure turns an hour of Herdr
-// being down into thousands of identical lines. Logging only as the run doubles
-// keeps the first failure prompt and the rest proportionate: an hour costs a
-// dozen lines and still says how long it has been going on.
+// failureLog decides how often a run of failing polls is worth mentioning. At
+// two polls a second, logging every one turns an hour of Herdr being down into
+// thousands of identical lines; logging as the run doubles costs a dozen.
 type failureLog struct {
 	run  int
 	next int
@@ -182,7 +169,7 @@ func (a *App) poll(ctx context.Context, client herdr.Client) error {
 }
 
 // labelsOf indexes tabs by id for the manual-name bookkeeping, which needs both
-// halves: an id that is gone, and a label that has moved on.
+// an id that is gone and a label that has moved on.
 func labelsOf(tabs []state.TabState) map[string]string {
 	labels := make(map[string]string, len(tabs))
 	for _, tab := range tabs {
@@ -191,12 +178,9 @@ func labelsOf(tabs []state.TabState) map[string]string {
 	return labels
 }
 
-// tabsIn assembles the snapshot's tabs, each with the panes it holds.
-//
-// The snapshot carries everything about a pane except what is running in it,
-// which needs a request of its own. That request measured 0.11 ms — less than
-// the snapshot that preceded it — so it is made for every pane rather than
-// guessed at, and a pane whose processes cannot be read simply has none.
+// tabsIn assembles the snapshot's tabs with their panes. What is running in a
+// pane needs a request of its own, measured at 0.11 ms — cheaper than the
+// snapshot — so it is made for every pane rather than guessed at.
 func (a *App) tabsIn(ctx context.Context, client herdr.Client, snapshot herdr.Snapshot) []state.TabState {
 	workspaces := make(map[string]string, len(snapshot.Workspaces))
 	for _, workspace := range snapshot.Workspaces {
@@ -213,9 +197,8 @@ func (a *App) tabsIn(ctx context.Context, client herdr.Client, snapshot herdr.Sn
 			state.PaneFrom(pane, processes, a.changes.ChangedAt(pane.PaneID)))
 	}
 
-	// A tab nobody has named carries its place in its workspace, and the
-	// snapshot lists tabs in the order they are shown, so counting them gives
-	// the label Herdr would have put there.
+	// An unnamed tab carries its place in the workspace, and the snapshot lists
+	// tabs in display order, so counting them gives that label.
 	positions := make(map[string]int, len(snapshot.Workspaces))
 
 	tabs := make([]state.TabState, 0, len(snapshot.Tabs))

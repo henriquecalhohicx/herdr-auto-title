@@ -60,11 +60,9 @@ func TestATabTurningUpUnnamedIsNotTheUsers(t *testing.T) {
 }
 
 func TestATabFallingBackToItsDefaultLabelIsNotTheUsers(t *testing.T) {
-	// Herdr's default label is not only how a tab starts out. It comes back
-	// when the tab is unnamed again, and it slides down a place for every tab
-	// to the left of it that closes — so a tab Auto Title has been naming for
-	// a while can find itself wearing one. Locking there would freeze the tab
-	// at a number for the rest of the session.
+	// The default label is not only how a tab starts out: it comes back, and it
+	// slides down for every tab that closes to the left. Locking there would
+	// freeze the tab at a number for the rest of the session.
 	m := newManual(t)
 	m.Observe(sighting("wE:t1", "1", "dashboard"))
 	m.Applied("wE:t1", "dashboard")

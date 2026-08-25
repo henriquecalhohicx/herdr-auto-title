@@ -6,12 +6,8 @@ import (
 )
 
 // genericValues name a program, a shell or a place rather than what the user is
-// doing there. A title made of one of these tells a reader nothing the tab does
-// not already show, so a source that finds one declines and the resolver falls
-// through to something more specific.
-//
-// Keys are lower-cased; lookups normalize before matching. Later sources add
-// their own entries here rather than growing their own lists.
+// doing there, so a source that finds one declines. Keys are lower-cased;
+// lookups normalize before matching.
 var genericValues = map[string]struct{}{
 	// Shells.
 	"bash":  {},
@@ -33,30 +29,17 @@ var genericValues = map[string]struct{}{
 var uriPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*://`)
 
 // promptPattern matches the title a shell sets from its own prompt:
-// `root@psi:`, `alex@macbook:~/work`, `deploy@prod-01:/var/log`.
-//
-// It is the same kind of value as a bare `~` — it says who and where, which the
-// tab's context already says, and never says what the user is doing. Remote
-// shells set it most often, which is how it reaches a tab that is otherwise
-// named after a host.
+// `root@psi:`, `alex@macbook:~/work`. It says who and where, which the context
+// already says, and never what the user is doing.
 var promptPattern = regexp.MustCompile(`^[^\s@]+@[^\s@:]+:\S*$`)
 
 // punctuation wraps and joins words inside titles such as
 // `Makefile (~/work/dashboard) - Nvim`.
 const punctuation = `()[]{}<>"'` + ",;:-–—|"
 
-// Meaningful cleans an untrusted value for use as part of a title and reports
-// whether anything useful survived.
-//
-// Cleaning removes locations, and a value that is nothing but a shell prompt is
-// rejected outright. Editors title their window with the path of the
-// file they hold — `auth.ts (~/work/dashboard/src) - Nvim` — and the context
-// half of a title already says where the user is, so the path is both redundant
-// and long enough to push the useful part past the length limit. What remains,
-// `auth.ts - Nvim`, is what the user actually wanted to know.
-//
-// A value that is nothing but a location, such as the `~` a shell sets, leaves
-// nothing behind and is rejected.
+// Meaningful cleans an untrusted value for use in a title and reports whether
+// anything useful survived: `auth.ts (~/work/src) - Nvim` keeps `auth.ts -
+// Nvim`, while a bare `~` leaves nothing.
 func Meaningful(value string) (string, bool) {
 	cleaned := stripLocations(strings.TrimSpace(value))
 	if cleaned == "" {
@@ -72,10 +55,8 @@ func Meaningful(value string) (string, bool) {
 }
 
 // stripLocations removes every word that is an absolute path, a home-anchored
-// path or a URI, then tidies up the punctuation those words left behind.
-//
-// Relative paths survive: `Fix bug in src/auth.ts` describes work rather than a
-// place.
+// path or a URI, then tidies the punctuation left behind. Relative paths
+// survive: `Fix bug in src/auth.ts` describes work rather than a place.
 func stripLocations(value string) string {
 	words := strings.Fields(value)
 	kept := make([]string, 0, len(words))

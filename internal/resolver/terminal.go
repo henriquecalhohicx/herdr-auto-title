@@ -2,17 +2,9 @@ package resolver
 
 import "github.com/kryptamine/herdr-auto-title/internal/state"
 
-// TerminalTitle derives the activity from the pane's terminal title.
-//
-// It outranks the working directory: a title a program went out of its way to
-// set usually says what is happening, while the directory only says where. It
-// contributes an activity and no context, so a meaningful title combines with
-// the directory into `<context> › <activity>`.
-//
-// When the pane names a single program, that program qualifies the title:
-// `nvim:auth.provider.ts` rather than `auth.provider.ts - Nvim`. The program is
-// read from the process table rather than guessed at from the title's shape,
-// and the title then loses the name it was already carrying.
+// TerminalTitle derives the activity from the pane's terminal title: a title a
+// program went out of its way to set usually says what is happening. A lone
+// program in the pane qualifies it, `nvim › auth.provider.ts`.
 type TerminalTitle struct{}
 
 var _ Source = TerminalTitle{}

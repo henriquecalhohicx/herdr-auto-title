@@ -7,42 +7,27 @@ import (
 )
 
 const (
-	// sshKind marks a host as reached over ssh, bound to it the way any kind is
-	// bound to its detail: `ssh › prod-01`.
-	//
-	// The mark belongs on the host rather than in the activity slot, because
-	// the activity is contested: a remote shell sets a terminal title, that
-	// title outranks anything this source could put there, and the tab would
-	// stop saying it is remote at exactly the moment it has most to say. The
-	// host slot has no such competition — nothing else names a machine.
+	// sshKind marks a host as reached over ssh: `ssh › prod-01`. It goes on
+	// the host, not the activity, which the terminal title would outrank —
+	// see docs/architecture/title-resolution.md.
 	sshKind = "ssh"
 	// SSHActivity marks a session whose host could not be read, where there is
 	// no host to bind the kind to.
 	SSHActivity = "SSH"
 )
 
-// sshFlagsWithValue are the ssh options whose value is a separate argument, so
-// `ssh -p 2222 prod-01` must not read 2222 as the destination.
-//
-// Everything else that starts with a dash is a switch, or carries its value
-// attached (`-p2222`), and is skipped either way.
+// sshFlagsWithValue are the options whose value is a separate argument, so
+// `ssh -p 2222 prod-01` does not read 2222 as the destination. Everything else
+// starting with a dash is a switch or carries its value attached.
 var sshFlagsWithValue = map[byte]struct{}{
 	'B': {}, 'b': {}, 'c': {}, 'D': {}, 'E': {}, 'e': {}, 'F': {}, 'I': {},
 	'i': {}, 'J': {}, 'L': {}, 'l': {}, 'm': {}, 'O': {}, 'o': {}, 'P': {},
 	'p': {}, 'Q': {}, 'R': {}, 'S': {}, 'W': {}, 'w': {},
 }
 
-// SSH names a tab after the host it is connected to.
-//
-// A shell on a remote machine has a working directory and a terminal title like
-// any other, and both describe the remote — but neither says which machine, and
-// that is the thing a tab full of identical-looking shells needs to say. The
-// host becomes the context, marked as remote: `ssh › prod-01`, and
-// `ssh › prod-01 › Restart the queue workers` once the remote shell has
-// something to report.
-//
-// The user is deliberately dropped: `root@prod-01` and `deploy@prod-01` are the
-// same machine, and a tab bar has no room to say who is logged in.
+// SSH makes the host the tab's context: `ssh › prod-01`. A remote shell's
+// directory and title describe the remote but never say which machine, which is
+// what a row of identical shells needs. The user is dropped.
 type SSH struct{}
 
 var _ Source = SSH{}
@@ -83,11 +68,9 @@ func sshArgs(pane *state.PaneState) ([]string, bool) {
 	return nil, false
 }
 
-// sshHost extracts the destination from an ssh command line.
-//
-// The destination is the first argument that is not an option or an option's
-// value; everything after it is the remote command, which names the work rather
-// than the machine and is left to the terminal title to report.
+// sshHost extracts the destination: the first argument that is not an option or
+// an option's value. Everything after it is the remote command, left to the
+// terminal title to report.
 func sshHost(args []string) string {
 	if len(args) == 0 {
 		return ""

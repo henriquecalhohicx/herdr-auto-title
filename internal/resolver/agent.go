@@ -6,17 +6,9 @@ import (
 	"github.com/kryptamine/herdr-auto-title/internal/state"
 )
 
-// Agent derives the activity from what the pane's agent says it is working on.
-//
-// It outranks every other source: when an agent reports a title, that title is
-// the most direct statement of what the tab is for that Auto Title will ever
-// see. The agent supplies no context, so the working directory still completes
-// the name into `<context> › <activity>`.
-//
-// Many agents report no title at all and express the same thing through the
-// terminal title instead; those panes fall through to TerminalTitle, which is
-// the next source down. Nothing here reads an agent's transcript or asks
-// anything over the network — the input is what Herdr's snapshot already carries.
+// Agent derives the activity from what the pane's agent says it is working on,
+// which outranks every other source. Many agents leave the field empty and fall
+// through to TerminalTitle instead.
 type Agent struct{}
 
 var _ Source = Agent{}

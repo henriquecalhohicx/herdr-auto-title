@@ -77,9 +77,8 @@ func TestFormat(t *testing.T) {
 
 func TestTruncationNeverCutsAGraphemeClusterOpen(t *testing.T) {
 	// Several code points can make the one character a reader sees: a family
-	// emoji is four joined by zero-width joiners, and a thumb carries its skin
-	// tone as a second code point. Cutting inside one leaves half a character
-	// behind, ending on an invisible joiner.
+	// emoji is four joined by zero-width joiners. Cutting inside one leaves
+	// half a character, ending on an invisible joiner.
 	tests := []struct {
 		name     string
 		in       string

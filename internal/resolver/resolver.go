@@ -1,7 +1,6 @@
-// Package resolver turns a tab's read state into a tab title.
-//
-// Resolution is deterministic: identical state always yields an identical
-// decision. No network call, no LLM, no transcript reading.
+// Package resolver turns a tab's read state into a tab title. Resolution is
+// deterministic: identical state always yields an identical decision. No
+// network call, no LLM, no transcript reading.
 package resolver
 
 import (
@@ -18,15 +17,9 @@ const DefaultMaxLength = 64
 // GenericFallback names a tab whose context tells us nothing.
 const GenericFallback = "Shell"
 
-// Confidence levels form the resolution ladder. Each source returns its own
-// through Source.Confidence, and the resolver orders itself by them, so the
-// ladder is stated once rather than being implied a second time by the order
-// sources happen to be listed in. A source never overrides a field a
-// higher-priority source already supplied.
-//
-// They live in one block because the numbering is shared: a source's place is
-// only meaningful relative to the others, and a gap left free here is what
-// makes room for the next one.
+// Confidence levels form the resolution ladder, and the resolver orders itself
+// by them. A source never overrides a field a higher one already supplied. The
+// gaps are what make room for the next source.
 const (
 	ConfidenceFallback      = 10
 	ConfidenceCWD           = 30
@@ -76,12 +69,8 @@ type Deterministic struct {
 
 var _ TitleResolver = (*Deterministic)(nil)
 
-// New builds a resolver from sources, ordering them by confidence.
-//
-// The order is derived rather than trusted. Listing sources out of ladder order
-// used to leave the numbers saying one thing and the behaviour doing another,
-// with nothing to catch it; now the numbers decide. Equal confidences keep the
-// order they were given.
+// New builds a resolver from sources, ordering them by confidence rather than
+// by the order they are listed in. Equal confidences keep the order given.
 func New(maxLength int, sources ...Source) *Deterministic {
 	if maxLength <= 0 {
 		maxLength = DefaultMaxLength
@@ -93,10 +82,8 @@ func New(maxLength int, sources ...Source) *Deterministic {
 	return &Deterministic{sources: ordered, maxLength: maxLength}
 }
 
-// Default builds the resolver Auto Title ships with: every source there is.
-// Later tickets add their sources here, so the binary and the tests can never
-// drift apart on what the chain contains. The order below is the ladder's, but
-// only for reading — New sorts by confidence regardless.
+// Default builds the resolver Auto Title ships with, so the binary and the
+// tests cannot drift apart on what the chain contains.
 func Default(maxLength int) *Deterministic {
 	return New(maxLength,
 		NewAgent(),
@@ -129,11 +116,8 @@ type collected struct {
 }
 
 // collect walks the sources in ladder order, filling each field with the first
-// source that supplies it.
-//
-// The two fields are filled independently, so a source low on the ladder can
-// complete a title a higher one only half answered: an agent says what a tab is
-// doing, and the working directory still says where.
+// source that supplies it. The two are filled independently, so a low source
+// can complete a title a higher one only half answered.
 func (d *Deterministic) collect(pane *state.PaneState) collected {
 	var found collected
 	for _, source := range d.sources {
@@ -184,10 +168,8 @@ func withoutRepetition(parts Parts, workspace string) Parts {
 		parts.Activity = ""
 	}
 
-	// Herdr shows the workspace above its tabs, so a tab in the workspace it is
-	// named after spends half its width repeating what is already on screen.
-	// Dropped only when something else remains: a tab reduced to nothing has
-	// lost more than it saved.
+	// Herdr shows the workspace above its tabs, so repeating it wastes half the
+	// width. Dropped only when something else remains.
 	if parts.Activity != "" && strings.EqualFold(parts.Context, workspace) {
 		parts.Context = ""
 	}

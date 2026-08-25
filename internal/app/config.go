@@ -19,11 +19,9 @@ const (
 	EnvManual    = "HERDR_AUTO_TITLE_MANUAL_FILE"
 )
 
-// DefaultPoll is how often the session is read.
-//
-// A snapshot of a six-pane session measured 0.47 ms and 6 KB, so two polls a
-// second cost about a thousandth of a core. Half a second is short enough that
-// a rename lands while the user is still looking at the tab they changed.
+// DefaultPoll is how often the session is read. A six-pane snapshot measured
+// 0.47 ms and 6 KB, so twice a second costs about a thousandth of a core, and
+// a rename lands while the user is still looking at the tab.
 const DefaultPoll = 500 * time.Millisecond
 
 // Config is Auto Title's runtime configuration.
@@ -58,12 +56,8 @@ func LoadConfig() (Config, []string) {
 }
 
 // read returns what the environment says name is, or fallback when it says
-// nothing usable.
-//
-// Nothing here fails. A variable that cannot be used is reported and the
-// default is kept, so a typo in a shell profile never stops the plugin from
-// starting — which is why this appends a warning rather than returning an
-// error, and why it is the only place a warning is worded.
+// nothing usable. Nothing here fails: a typo must not stop the plugin starting,
+// which is why it warns instead, and is the only place a warning is worded.
 func read[T any](warnings *[]string, name string, fallback T, convert converter[T]) T {
 	raw := os.Getenv(name)
 	if raw == "" {

@@ -13,16 +13,9 @@ var shellNames = map[string]struct{}{
 	"tcsh": {}, "csh": {}, "login": {},
 }
 
-// paneKind names what a pane is running, or "" when that cannot be said.
-//
-// An agent is asked for first, because Herdr recognizes it directly and its
-// process list does not: a coding agent shows up as half a dozen helpers with
-// its own name nowhere among them.
-//
-// Failing that, Herdr reports a pane's foreground process together with its
-// descendants, and only a lone process names a pane. A build tool reports as
-// `esbuild` and five `node`s; picking one of those would be guesswork, and the
-// terminal title already says what such a pane is doing.
+// paneKind names what a pane is running, or "" when that cannot be said. The
+// agent comes first because a process list never names one, and only a lone
+// process names a pane: a build tool is `esbuild` and five `node`s.
 func paneKind(pane *state.PaneState) string {
 	if pane == nil {
 		return ""
@@ -101,11 +94,8 @@ func stripKind(detail, kind string) string {
 }
 
 // Process names a pane after the program running in it when nothing has said
-// what that program is doing.
-//
-// It is the bare half of what the terminal title contributes: a tab holding an
-// editor with no file open still reads `dashboard › nvim`, which says more than
-// the directory alone.
+// what that program is doing: an editor with no file open still reads
+// `dashboard › nvim`.
 type Process struct{}
 
 var _ Source = Process{}

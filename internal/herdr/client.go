@@ -21,11 +21,9 @@ type Client interface {
 	Call(ctx context.Context, method string, params any, result any) error
 }
 
-// SocketClient speaks NDJSON to the Herdr socket.
-//
-// Herdr serves one request per connection and closes it after answering, so
-// each call dials a connection of its own. That is the whole protocol Auto
-// Title needs: it polls the session rather than subscribing to it.
+// SocketClient speaks NDJSON to the Herdr socket. Herdr closes the connection
+// after answering, so each call dials its own — which is why there is nothing
+// to reconnect anywhere in the plugin.
 type SocketClient struct {
 	path string
 	seq  atomic.Uint64
@@ -113,12 +111,9 @@ func withContextErr(ctx context.Context, err error) error {
 	return err
 }
 
-// SessionSnapshot fetches the whole session: every tab with its label, and every
-// pane with the context it carries.
-//
-// This is Auto Title's only source of truth, and there is deliberately no
-// Subscribe beside it. The reason is measured, and it is written down on the
-// poll loop in package app.
+// SessionSnapshot fetches the whole session: every tab with its label, every
+// pane with its context. There is deliberately no Subscribe beside it — see
+// docs/architecture/poll-loop.md.
 func SessionSnapshot(ctx context.Context, c Client) (Snapshot, error) {
 	var res snapshotResult
 	if err := c.Call(ctx, MethodSessionSnapshot, emptyParams{}, &res); err != nil {
@@ -127,12 +122,8 @@ func SessionSnapshot(ctx context.Context, c Client) (Snapshot, error) {
 	return res.Snapshot, nil
 }
 
-// PaneProcesses reads what is running in a pane.
-//
-// The snapshot does not carry it: PaneInfo has no process name, and this is the
-// only method that answers one. It costs a further request per pane, measured
-// at 0.11 ms — cheaper than the snapshot itself, because it reads the process
-// table rather than serializing the session.
+// PaneProcesses reads what is running in a pane. PaneInfo has no process name
+// and this is the only method that answers one, at 0.11 ms per pane.
 func PaneProcesses(ctx context.Context, c Client, paneID string) ([]PaneProcessInfoProcess, error) {
 	var res processInfoResult
 	if err := c.Call(ctx, MethodPaneProcessInfo, PaneTarget{PaneID: paneID}, &res); err != nil {

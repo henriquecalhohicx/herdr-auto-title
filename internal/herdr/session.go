@@ -10,9 +10,8 @@ const (
 	AgentStatusUnknown = "unknown"
 )
 
-// Wire types carry only the fields Auto Title reads. Herdr sends a great deal
-// more; adding a field here that nothing uses makes the type claim a dependency
-// the code does not have.
+// Wire types carry only the fields Auto Title reads: a field nothing uses makes
+// the type claim a dependency the code does not have.
 
 // WorkspaceInfo describes a workspace. Its label is what Herdr shows above the
 // tabs, and it is usually the project every tab in it belongs to.
@@ -29,10 +28,8 @@ type TabInfo struct {
 	Label       string `json:"label"`
 }
 
-// PaneInfo describes a pane. It carries no foreground process name: that is
-// only available through the pane.process_info method.
-//
-// Every optional field is nullable on the wire and decodes a JSON null to "".
+// PaneInfo describes a pane. It carries no foreground process name — only
+// pane.process_info answers that — and every optional field decodes null to "".
 type PaneInfo struct {
 	PaneID   string `json:"pane_id"`
 	TabID    string `json:"tab_id"`
@@ -60,10 +57,9 @@ type PaneProcessInfoProcess struct {
 	Argv []string `json:"argv"`
 }
 
-// PaneProcessInfo is what pane.process_info answers.
-//
-// ForegroundProcesses holds the pane's foreground process and its descendants,
-// so a pane running an editor that shelled out lists both.
+// PaneProcessInfo is what pane.process_info answers. ForegroundProcesses holds
+// the pane's foreground process and its descendants, so an editor that shelled
+// out lists both.
 type PaneProcessInfo struct {
 	ForegroundProcesses []PaneProcessInfoProcess `json:"foreground_processes"`
 }

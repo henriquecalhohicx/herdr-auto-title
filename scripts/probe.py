@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Inspect the live Herdr socket.
 
-Auto Title depends on protocol details the specification got wrong, so verify
-against the running Herdr before writing code that assumes anything.
+Verify against the running Herdr before writing code that assumes anything.
 """
 
 import json

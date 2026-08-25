@@ -8,12 +8,9 @@ import (
 	"github.com/rivo/uniseg"
 )
 
-// Separator joins every part of a title, and there is only one.
-//
-// A title reads as a path from the general to the particular:
-// `self-care-portal › nvim › auth.provider.ts`. Where a part came from — a
-// directory, a program, a file — is not something a separator can convey, and a
-// second one only asks the reader to learn a distinction they cannot see.
+// Separator joins every part of a title, and there is only one: where a part
+// came from is not something a separator can convey, and a second kind would
+// ask the reader to learn a distinction they cannot see.
 const Separator = " " + separatorRune + " "
 
 const separatorRune = "›"
@@ -34,12 +31,9 @@ var (
 	sepSpacingRe = regexp.MustCompile(`\s*` + separatorRune + `\s*`)
 )
 
-// Sanitize turns an untrusted value — a terminal title, an agent title, a
-// branch name, a path — into something safe to use as a tab label.
-//
-// It strips ANSI escapes, drops control characters, normalizes whitespace,
-// collapses repeated separators, trims, and truncates to maxLen columns of the
-// tab bar. An empty result means the value carries nothing usable.
+// Sanitize turns an untrusted value into something safe to use as a tab label:
+// ANSI escapes and control characters go, whitespace and separators are
+// normalized, and the result is cut to maxLen columns. Empty means unusable.
 func Sanitize(s string, maxLen int) string {
 	s = ansiRe.ReplaceAllString(s, "")
 
@@ -75,19 +69,9 @@ func truncate(s string, maxWidth int) string {
 	return strings.TrimSpace(cut)
 }
 
-// splitAtWidth returns the longest prefix of s that fits in maxWidth columns of
-// a terminal, along with what is left over.
-//
-// A limit on a title is a limit on the room it takes in the tab bar, and rune
-// count is not that. CJK characters and emoji occupy two columns each, so a
-// title counted in runes can take twice the space it was given — sixty-four
-// runes of Japanese fill a hundred and twenty-eight columns.
-//
-// The cut falls between grapheme clusters, which is what a reader sees as one
-// character. Several code points often make one: a family emoji is four joined
-// by zero-width joiners, and a flag is two regional indicators. Cutting inside
-// one leaves a broken sequence behind — half a family, ending on an invisible
-// joiner.
+// splitAtWidth returns the longest prefix of s fitting in maxWidth terminal
+// columns, cut between grapheme clusters. Neither runes nor bytes work here —
+// see docs/architecture/sanitization.md.
 func splitAtWidth(s string, maxWidth int) (head, rest string) {
 	rest = s
 	state := -1

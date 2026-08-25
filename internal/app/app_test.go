@@ -503,10 +503,9 @@ func TestATabCreatedAndNamedBeforeTheNextPollIsLeftAlone(t *testing.T) {
 }
 
 func TestATabCreatedWithoutANameIsNamed(t *testing.T) {
-	// The other half: Herdr names a new tab after its place in the workspace,
-	// and that is not somebody's choice. The label is the position — the
-	// second tab is "2" — and not TabInfo.number, which counts every tab the
-	// workspace has ever held.
+	// Herdr names a new tab after its place in the workspace, which is nobody's
+	// choice. The second tab is "2" — not TabInfo.number, which counts every
+	// tab the workspace has ever held.
 	h := start(t,
 		[]herdr.TabInfo{{TabID: "wE:t1", Label: "1"}},
 		[]herdr.PaneInfo{{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true}},

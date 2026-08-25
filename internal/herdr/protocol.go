@@ -1,9 +1,5 @@
-// Package herdr implements a client for the Herdr local socket API.
-//
-// The wire format is newline-delimited JSON over the local socket named by
-// HERDR_SOCKET_PATH. Every line is one JSON object: a request out, a response
-// back, and then the connection closes.
-//
+// Package herdr implements a client for the Herdr local socket API: NDJSON over
+// the socket named by HERDR_SOCKET_PATH, one request per connection.
 // Verified against Herdr v0.8.2, protocol 20.
 package herdr
 
@@ -13,10 +9,8 @@ import (
 	"fmt"
 )
 
-// request is one outbound line.
-//
-// Herdr requires "params" on every method, so it is never omitted; methods
-// without parameters take an empty object.
+// request is one outbound line. Herdr requires "params" on every method, so
+// methods without parameters take an empty object rather than omitting it.
 type request struct {
 	ID     string `json:"id"`
 	Method string `json:"method"`

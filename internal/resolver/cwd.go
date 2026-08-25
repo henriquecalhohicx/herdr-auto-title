@@ -7,12 +7,9 @@ import (
 	"github.com/kryptamine/herdr-auto-title/internal/state"
 )
 
-// CWD derives the tab's context from the pane's working directory: the
-// basename of the directory, which is normally the project name.
-//
-// It is the lowest-priority source. Directories that say nothing about what the
-// user is doing — the home directory, the filesystem root, a relative path —
-// yield nothing, and the resolver falls back to a generic name.
+// CWD derives the tab's context from the basename of the pane's working
+// directory, which is normally the project name. The home directory, the
+// filesystem root and a relative path all yield nothing.
 type CWD struct {
 	home string
 }

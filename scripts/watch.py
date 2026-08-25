@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Rebuild and restart Auto Title whenever a source file changes.
 
-Run this in a tab of its own and leave it in the foreground: Ctrl+C stops both
-the watcher and the plugin. Backgrounding it is how you end up with a stray
-process quietly renaming tabs.
+Keep it in the foreground: Ctrl+C stops both the watcher and the plugin, and
+backgrounding it is how you end up with a stray process renaming tabs.
 """
 
 import os
@@ -103,10 +102,8 @@ def watch():
 
 
 def interrupt(signum, frame):
-    """Turn a signal into the interrupt Ctrl+C already raises.
-
-    `make stop` sends SIGTERM, and Python would end the process on the spot.
-    Raising here instead runs the cleanup, so the plugin is never orphaned.
+    """Turn a signal into the interrupt Ctrl+C already raises, so `make stop`
+    runs the cleanup instead of ending the process and orphaning the plugin.
     """
     raise KeyboardInterrupt
 

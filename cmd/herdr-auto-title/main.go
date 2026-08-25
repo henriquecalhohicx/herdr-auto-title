@@ -1,8 +1,6 @@
-// Command herdr-auto-title is the Herdr Auto Title plugin process.
-//
-// Herdr launches it once through a startup hook. It then stays alive, polls the
-// session over the Herdr socket, and keeps every tab's title in step with what
-// that tab is doing.
+// Command herdr-auto-title is the Herdr Auto Title plugin process: launched once
+// through a startup hook, it stays alive and keeps every tab's title in step
+// with what that tab is doing.
 package main
 
 import (

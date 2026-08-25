@@ -9,46 +9,29 @@ import (
 )
 
 // Manual remembers which tabs the user renamed by hand, so Auto Title stops
-// naming them.
-//
-// There is nothing to correlate a rename with: the plugin polls rather than
-// subscribing, so a rename is not an event that arrives but a label that has
-// changed between two polls. A tab is the user's work when its label moved to
-// something Auto Title neither set nor would have set.
-//
-// The first poll never locks anything. Without that rule, starting the plugin
-// claims every tab whose label does not already match what the resolver would
-// produce — which is most of them, and the whole session at once.
-//
-// That rule is about the first poll, not about each tab's first sighting. A tab
-// that turns up later is new, and Herdr names a new tab after its place in the
-// workspace: a new tab already carrying something else was named by the person
-// who made it, possibly in the half-second before the first poll could see it.
+// naming them. A rename is not an event but a label that moved between two
+// polls; see docs/architecture/manual-rename-protection.md.
 type Manual struct {
 	mu   sync.Mutex
 	path string
-	// settled is false until the first poll has finished, while every tab is
-	// being seen for the first time and none can be judged.
+	// settled is false until the first poll has finished, while no tab can yet
+	// be judged.
 	settled bool
-	// seen is the label each tab carried when it was last looked at, whether
-	// Auto Title set it or not.
+	// seen is the label each tab carried when it was last looked at.
 	seen map[string]string
-	// locked is the label a tab carried when the user claimed it. Keeping the
-	// label, rather than just the id, is what makes the locks safe to reload:
-	// Herdr's tab ids are reused by the next session.
+	// locked is the label a tab carried when the user claimed it. The label,
+	// not the id, is what makes a reloaded lock safe: Herdr reuses tab ids.
 	locked map[string]string
 }
 
-// manualFile is the on-disk form. Locks outlive the process because Herdr can
-// restart a plugin mid-session, and losing every manual name to that would be a
-// worse surprise than the plugin briefly stopping.
+// manualFile is the on-disk form: locks outlive the process because Herdr can
+// restart a plugin mid-session.
 type manualFile struct {
 	Locked map[string]string `json:"locked_tabs"`
 }
 
-// LoadManual reads persisted locks from path, which may not exist. A file that
-// cannot be read or parsed yields an empty set rather than an error: manual
-// names are a convenience, and refusing to start over them would not be.
+// LoadManual reads persisted locks from path. Anything unreadable yields an
+// empty set: this is a convenience, not a reason to refuse to start.
 func LoadManual(path string) *Manual {
 	m := &Manual{
 		path:   path,
@@ -87,11 +70,10 @@ func (m *Manual) Locked(tabID string) bool {
 	return locked
 }
 
-// Sighting is what one poll saw of a tab.
+// Sighting is what one poll saw of a tab: the label it carries, what the
+// resolver would name it, and what Herdr names a tab nobody has claimed.
 type Sighting struct {
-	TabID string
-	// Current is the label the tab carries, Desired what the resolver would
-	// name it, and Default what Herdr names a tab nobody has claimed.
+	TabID   string
 	Current string
 	Desired string
 	Default string
@@ -99,12 +81,6 @@ type Sighting struct {
 
 // Observe records what a poll saw and reports whether the user put that label
 // there.
-//
-// A label the resolver would produce anyway is never the user's — it cannot be
-// told from Auto Title's own work, and is harmless either way. Neither is
-// Herdr's own label for an unclaimed tab. Past that, a label that has moved
-// since the last look was moved by someone, and a tab turning up already named
-// was named before Auto Title first saw it.
 func (m *Manual) Observe(s Sighting) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -116,11 +92,8 @@ func (m *Manual) Observe(s Sighting) bool {
 	case s.Current == s.Desired:
 		return false
 	case s.Current == s.Default:
-		// Nobody has named this tab: it carries the label Herdr gives one that
-		// is only a position. That is not just how a tab starts out — the
-		// label comes back whenever the tab is unnamed again, and every tab to
-		// the right of a closed one inherits its neighbour's, so a tab already
-		// known can wear it too.
+		// Nobody has named it. A known tab can wear this too: the label comes
+		// back, and closing a tab shifts every label after it.
 		return false
 	case known:
 		if s.Current == previous {
@@ -128,8 +101,7 @@ func (m *Manual) Observe(s Sighting) bool {
 			return false
 		}
 	case !m.settled:
-		// The first poll, where every tab is new to Auto Title and almost none
-		// carries a name it has set.
+		// The first poll, where nothing carries a name Auto Title has set.
 		return false
 	}
 
@@ -138,8 +110,8 @@ func (m *Manual) Observe(s Sighting) bool {
 	return true
 }
 
-// Settled marks the end of a poll. Only the first one matters: after it, a tab
-// Auto Title has never seen is a tab that did not exist before.
+// Settled marks the end of a poll. Only the first matters: after it, an unseen
+// tab is one that did not exist before.
 func (m *Manual) Settled() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -155,12 +127,8 @@ func (m *Manual) Applied(tabID, label string) {
 }
 
 // Retain drops everything about tabs the session no longer holds, and releases
-// a lock whose tab now carries a different label.
-//
-// The second half is what makes reloading locks safe. Herdr's tab ids belong to
-// a session, so a stored `wE:t2` may be an unrelated tab by the time it is read
-// back; a lock only survives if the tab still carries the name it was locked
-// with.
+// a lock whose tab now carries a different label — which is what stops a
+// reloaded lock from claiming an unrelated tab that inherited its id.
 func (m *Manual) Retain(live map[string]string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -182,11 +150,8 @@ func (m *Manual) Retain(live map[string]string) {
 	}
 }
 
-// saveLocked writes the locks out. The caller holds the mutex.
-//
-// Writing goes through a temporary file so a crash mid-write cannot leave a
-// half-written file behind. A failure is silent for the same reason a failed
-// read is: this is a convenience, not the plugin's purpose.
+// saveLocked writes the locks out through a temporary file, so a crash cannot
+// leave a half-written one. The caller holds the mutex; failure is silent.
 func (m *Manual) saveLocked() {
 	if m.path == "" {
 		return
@@ -195,7 +160,7 @@ func (m *Manual) saveLocked() {
 		return
 	}
 
-	// Sorted keys keep the file stable, so it is readable and diffable.
+	// Sorted keys keep the file diffable.
 	ids := make([]string, 0, len(m.locked))
 	for id := range m.locked {
 		ids = append(ids, id)
