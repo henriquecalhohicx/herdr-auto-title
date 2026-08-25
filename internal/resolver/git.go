@@ -50,16 +50,16 @@ func (g Git) Resolve(pane *state.PaneState) (Parts, bool) {
 		return Parts{}, false
 	}
 
-	branch := branchLabel(pane.Git, g.maxLength)
+	branch := g.label(pane.Git)
 	if branch == "" {
 		return Parts{}, false
 	}
 	return Parts{Branch: branch}, true
 }
 
-// branchLabel reduces a checkout to what a tab says about it, or "" when it
-// says nothing worth the width.
-func branchLabel(checkout git.Checkout, maxLength int) string {
+// label reduces a checkout to what a tab says about it, or "" when it says
+// nothing worth the width.
+func (g Git) label(checkout git.Checkout) string {
 	if checkout.Branch == "" {
 		// A detached HEAD is the one place a bare hash belongs in a title: it
 		// is where commits get lost, and no name is being left behind.
@@ -70,7 +70,7 @@ func branchLabel(checkout git.Checkout, maxLength int) string {
 	if checkout.Branch == checkout.Default {
 		return ""
 	}
-	return shortenBranch(Sanitize(checkout.Branch, 0), maxLength)
+	return shortenBranch(Sanitize(checkout.Branch, 0), g.maxLength)
 }
 
 // shortenBranch reduces an over-long branch name to the part worth a tab's
