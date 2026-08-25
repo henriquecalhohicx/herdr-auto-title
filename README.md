@@ -28,10 +28,18 @@ https://github.com/user-attachments/assets/94d9f4f3-b986-4664-a9bc-d078ece4f05e
 herdr plugin install kryptamine/herdr-auto-title
 ```
 
-Herdr clones the repository, builds the binary and registers it, but it starts
-a plugin only when a session starts. **Restart Herdr once after installing**;
-until you do, nothing is renamed. `herdr plugin list` shows it, `herdr plugin
-disable` turns it off.
+Herdr clones the repository, builds the binary and registers it, but a plugin
+is started by the Herdr server, and only when it restores a session. So the
+install is followed by one more step, once:
+
+```sh
+herdr server stop   # closes the session; `herdr` brings it back
+```
+
+Reopening your terminal is not enough — that starts a new client and leaves the
+server, and your plugin, exactly as they were. Until the server restarts,
+nothing is renamed. `herdr plugin list` shows the plugin, `herdr plugin disable`
+turns it off.
 
 Working on the plugin rather than using it? [Development](docs/development.md)
 covers linking a local checkout, which Herdr makes you unlink before `install`
