@@ -26,9 +26,14 @@ func TestSanitize(t *testing.T) {
 		{"value at the limit is kept whole", "abcdefghij", 10, "abcdefghij"},
 		{"value over the limit is truncated", "abcdefghijk", 10, "abcdefghij"},
 		{"truncation leaves no dangling separator", "abcdefg › hij", 9, "abcdefg"},
-		// Non-ASCII on purpose: a title is truncated by runes, and cutting
-		// these two-byte characters by byte count would corrupt the result.
-		{"truncation counts runes not bytes", "проектная-работа", 8, "проектна"},
+		// Non-ASCII on purpose: cutting these two-byte characters by byte
+		// count would corrupt the result. They are one column each, so the
+		// limit still reaches eight of them.
+		{"truncation counts columns not bytes", "проектная-работа", 8, "проектна"},
+		// A limit on a title is a limit on the room it takes in the tab bar.
+		{"a double-width character costs two columns", "設定ファイル", 6, "設定フ"},
+		{"an odd limit leaves a wide character out", "設定ファイル", 5, "設定"},
+		{"nothing is cut when the whole value fits", "設定ファイル", 64, "設定ファイル"},
 	}
 
 	for _, tc := range tests {
@@ -65,6 +70,31 @@ func TestFormat(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := Format(tc.parts, 64); got != tc.want {
 				t.Errorf("Format(%+v) = %q, want %q", tc.parts, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestTruncationNeverCutsAGraphemeClusterOpen(t *testing.T) {
+	// Several code points can make the one character a reader sees: a family
+	// emoji is four joined by zero-width joiners, and a thumb carries its skin
+	// tone as a second code point. Cutting inside one leaves half a character
+	// behind, ending on an invisible joiner.
+	tests := []struct {
+		name     string
+		in       string
+		maxWidth int
+		want     string
+	}{
+		{"a cluster that fits is kept whole", "work \U0001F468\u200D\U0001F469\u200D\U0001F467\u200D\U0001F466", 7, "work \U0001F468\u200D\U0001F469\u200D\U0001F467\u200D\U0001F466"},
+		{"a cluster that does not fit is dropped whole", "work \U0001F468\u200D\U0001F469\u200D\U0001F467\u200D\U0001F466", 6, "work"},
+		{"a skin tone stays with its emoji", "review \U0001F44D\U0001F3FD ok", 8, "review"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Sanitize(tc.in, tc.maxWidth); got != tc.want {
+				t.Errorf("Sanitize(%q, %d) = %q, want %q", tc.in, tc.maxWidth, got, tc.want)
 			}
 		})
 	}

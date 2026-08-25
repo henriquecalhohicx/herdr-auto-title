@@ -4,6 +4,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/rivo/uniseg"
 )
 
 // Separator joins every part of a title, and there is only one.
@@ -36,8 +38,8 @@ var (
 // branch name, a path — into something safe to use as a tab label.
 //
 // It strips ANSI escapes, drops control characters, normalizes whitespace,
-// collapses repeated separators, trims, and truncates to maxLen runes. An empty
-// result means the value carries nothing usable.
+// collapses repeated separators, trims, and truncates to maxLen columns of the
+// tab bar. An empty result means the value carries nothing usable.
 func Sanitize(s string, maxLen int) string {
 	s = ansiRe.ReplaceAllString(s, "")
 
@@ -60,18 +62,43 @@ func Sanitize(s string, maxLen int) string {
 	return truncate(s, maxLen)
 }
 
-// truncate cuts to maxLen runes, never mid-rune, and leaves no dangling
-// separator behind.
-func truncate(s string, maxLen int) string {
-	if maxLen <= 0 {
+// truncate cuts to maxWidth columns and leaves no dangling separator behind.
+func truncate(s string, maxWidth int) string {
+	if maxWidth <= 0 {
 		return s
 	}
-	runes := []rune(s)
-	if len(runes) <= maxLen {
+	head, rest := splitAtWidth(s, maxWidth)
+	if rest == "" {
 		return s
 	}
-	cut := strings.TrimRight(string(runes[:maxLen]), trimmable)
+	cut := strings.TrimRight(head, trimmable)
 	return strings.TrimSpace(cut)
+}
+
+// splitAtWidth returns the longest prefix of s that fits in maxWidth columns of
+// a terminal, along with what is left over.
+//
+// A limit on a title is a limit on the room it takes in the tab bar, and rune
+// count is not that. CJK characters and emoji occupy two columns each, so a
+// title counted in runes can take twice the space it was given — sixty-four
+// runes of Japanese fill a hundred and twenty-eight columns.
+//
+// The cut falls between grapheme clusters, which is what a reader sees as one
+// character. Several code points often make one: a family emoji is four joined
+// by zero-width joiners, and a flag is two regional indicators. Cutting inside
+// one leaves a broken sequence behind — half a family, ending on an invisible
+// joiner.
+func splitAtWidth(s string, maxWidth int) (head, rest string) {
+	rest = s
+	state := -1
+	for width := 0; rest != ""; {
+		_, next, clusterWidth, nextState := uniseg.FirstGraphemeClusterInString(rest, state)
+		if width+clusterWidth > maxWidth {
+			break
+		}
+		width, rest, state = width+clusterWidth, next, nextState
+	}
+	return s[:len(s)-len(rest)], rest
 }
 
 // Format assembles a title from its parts and sanitizes the result as a whole.

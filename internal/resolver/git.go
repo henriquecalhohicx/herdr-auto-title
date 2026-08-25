@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"herdr-auto-title/internal/state"
 )
@@ -21,11 +22,12 @@ const (
 	GitTimeout = 2 * time.Second
 )
 
-// DefaultBranchMaxLength bounds what a branch may contribute to a title.
+// DefaultBranchMaxLength bounds what a branch may contribute to a title, in
+// columns of the tab bar.
 //
-// Twelve characters hold a tracker key, or a short word and part of the next,
-// and leave a tab readable beside a dozen others. Real branch names run far
-// past it: the ones this was calibrated against averaged fifty characters and
+// Twelve columns hold a tracker key, or a short word and part of the next, and
+// leave a tab readable beside a dozen others. Real branch names run far past
+// it: the ones this was calibrated against averaged fifty characters and
 // reached ninety.
 const DefaultBranchMaxLength = 12
 
@@ -220,18 +222,18 @@ func shortenBranch(branch string, maxLength int) string {
 	return cutAtSeparator(branch, maxLength)
 }
 
-// cutAtSeparator shortens a value to maxLength, ending on the last separator
-// that fits so the result is a whole word rather than a fragment.
-func cutAtSeparator(value string, maxLength int) string {
-	runes := []rune(value)
-	if len(runes) <= maxLength {
+// cutAtSeparator shortens a value to maxWidth columns, ending on the last
+// separator that fits so the result is a whole word rather than a fragment.
+func cutAtSeparator(value string, maxWidth int) string {
+	head, rest := splitAtWidth(value, maxWidth)
+	if rest == "" {
 		return strings.Trim(value, branchSeparators)
 	}
 
-	head := string(runes[:maxLength])
 	// When the character that did not fit is itself a separator, the head
 	// already ends on a whole word and cutting again would throw one away.
-	if !strings.ContainsRune(branchSeparators, runes[maxLength]) {
+	next, _ := utf8.DecodeRuneInString(rest)
+	if !strings.ContainsRune(branchSeparators, next) {
 		if cut := strings.LastIndexAny(head, branchSeparators); cut > 0 {
 			head = head[:cut]
 		}

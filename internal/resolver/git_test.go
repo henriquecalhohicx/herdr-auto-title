@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rivo/uniseg"
+
 	"herdr-auto-title/internal/state"
 )
 
@@ -182,10 +184,14 @@ func TestNoBranchIsShownWhenTheLimitIsZero(t *testing.T) {
 }
 
 func TestTheLimitBoundsWhatABranchAdds(t *testing.T) {
-	for _, limit := range []int{4, 8, 12, 40} {
-		got := shortenBranch("refactor-the-whole-poller", limit)
-		if len([]rune(got)) > limit {
-			t.Errorf("limit %d produced %q, %d runes", limit, got, len([]rune(got)))
+	// The limit is columns of the tab bar, which is why the wide branch is
+	// here: eight of its characters would fill sixteen.
+	for _, branch := range []string{"refactor-the-whole-poller", "\u8a2d\u5b9a-\u30d5\u30a1\u30a4\u30eb-work"} {
+		for _, limit := range []int{4, 8, 12, 40} {
+			got := shortenBranch(branch, limit)
+			if width := uniseg.StringWidth(got); width > limit {
+				t.Errorf("limit %d on %q produced %q, %d columns", limit, branch, got, width)
+			}
 		}
 	}
 }

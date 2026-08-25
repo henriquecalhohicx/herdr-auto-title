@@ -105,7 +105,8 @@ There is no scrollback scanning and no LLM.
 
 ### Title sources
 
-Titles are formatted as `<context> › <activity>`, capped at 64 characters. Each
+Titles are formatted as `<context> › <activity>`, capped at 64 columns of the
+tab bar. Each
 field is filled by the highest-priority source that supplies it, so a
 lower-priority source can complete a title without overriding a higher-priority
 one.
@@ -233,8 +234,14 @@ that keeps saying where it is.
 Every value that reaches a title — a directory name, a terminal title, an agent
 title — is stripped of ANSI escapes and control characters, whitespace
 is normalized, repeated separators are collapsed, and the result is truncated to
-the maximum length. Nothing derived from terminal output is ever passed to a
+the maximum width. Nothing derived from terminal output is ever passed to a
 shell: renames go over the socket API, never through `sh -c`.
+
+The limit is columns of the tab bar, not characters: CJK and emoji take two
+columns each, so counting characters would let a title fill twice the room it
+was given. The cut falls between grapheme clusters — what a reader sees as one
+character, which several code points often make — so a family emoji is kept
+whole or left out, never severed into half a family and a dangling joiner.
 
 ## Configuration
 
@@ -245,8 +252,8 @@ an unusable value is logged as a warning and the default is kept.
 |----------|---------|---------|
 | `HERDR_AUTO_TITLE_DEBUG` | `false` | Log at DEBUG instead of INFO |
 | `HERDR_AUTO_TITLE_POLL_MS` | `500` | How often the session is read; also the fastest a tab can be renamed |
-| `HERDR_AUTO_TITLE_MAX_LENGTH` | `64` | Maximum title length in characters |
-| `HERDR_AUTO_TITLE_BRANCH_MAX` | `12` | Most a git branch may add to a title; `0` leaves branches out |
+| `HERDR_AUTO_TITLE_MAX_LENGTH` | `64` | Maximum title width in tab-bar columns; CJK and emoji take two each |
+| `HERDR_AUTO_TITLE_BRANCH_MAX` | `12` | Most a git branch may add to a title, in columns; `0` leaves branches out |
 | `HERDR_AUTO_TITLE_MANUAL_FILE` | `<config>/herdr-auto-title/manual-names.json` | Where tabs you renamed by hand are remembered |
 
 Auto Title logs to stderr through `log/slog`. Raw terminal output and command

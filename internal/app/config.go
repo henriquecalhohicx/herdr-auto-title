@@ -28,8 +28,10 @@ const DefaultPoll = 500 * time.Millisecond
 
 // Config is Auto Title's runtime configuration.
 type Config struct {
-	Debug     bool
-	Poll      time.Duration
+	Debug bool
+	Poll  time.Duration
+	// MaxLength and BranchMax are measured in columns of the tab bar rather
+	// than in characters: a CJK character or an emoji takes two.
 	MaxLength int
 	// BranchMax bounds what a git branch may add to a title. Zero leaves
 	// branches out of titles entirely.

@@ -12,7 +12,7 @@ import (
 	"herdr-auto-title/internal/state"
 )
 
-// DefaultMaxLength bounds a generated title.
+// DefaultMaxLength bounds a generated title, in columns of the tab bar.
 const DefaultMaxLength = 64
 
 // GenericFallback names a tab whose context tells us nothing.
