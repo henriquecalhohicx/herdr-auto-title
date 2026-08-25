@@ -65,9 +65,9 @@ func branchLabel(checkout git.Checkout, maxLength int) string {
 		// is where commits get lost, and no name is being left behind.
 		return Sanitize(checkout.Commit, 0)
 	}
-	// A tab in a repository it is already named after learns nothing from
-	// being told it is on that repository's default branch.
-	if strings.EqualFold(checkout.Branch, checkout.Default) {
+	// Compared exactly, because git refs are: a branch named `Main` beside a
+	// `main` trunk is a different branch and has something to say.
+	if checkout.Branch == checkout.Default {
 		return ""
 	}
 	return shortenBranch(Sanitize(checkout.Branch, 0), maxLength)

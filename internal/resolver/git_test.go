@@ -50,6 +50,14 @@ func TestTheDefaultBranchIsTheRepositorysOwn(t *testing.T) {
 	}
 }
 
+func TestTheTrunkIsMatchedAsGitStoresIt(t *testing.T) {
+	// Git refs are case-sensitive, so `Main` beside a `main` trunk is another
+	// branch and has something to say.
+	if got := resolveRepoPane(repoPane("Main", "main")); got != "dashboard › Main" {
+		t.Errorf("title %q, want the branch", got)
+	}
+}
+
 func TestARepositoryWithNoRecordedTrunkAlwaysShowsItsBranch(t *testing.T) {
 	if got := resolveRepoPane(repoPane("main", "")); got != "dashboard › main" {
 		t.Errorf("title %q, want the branch", got)
