@@ -212,13 +212,7 @@ func (a *App) checkoutIn(pane herdr.PaneInfo) git.Checkout {
 		return git.Checkout{}
 	}
 
-	// The shell's own directory, for the same reason the CWD source prefers it:
-	// it names the project more stably than whatever is running right now.
-	dir := pane.CWD
-	if dir == "" {
-		dir = pane.ForegroundCWD
-	}
-	checkout, _ := git.Read(dir)
+	checkout, _ := git.Read(pane.Dir())
 	return checkout
 }
 

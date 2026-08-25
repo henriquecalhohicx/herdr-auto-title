@@ -14,7 +14,7 @@ const paneCWD = "/Users/dev/work/dashboard"
 
 func sshPane(argv ...string) *state.PaneState {
 	return &state.PaneState{
-		CWD: paneCWD,
+		Dir: paneCWD,
 		Processes: []state.Process{
 			{Name: "fish", Args: []string{"-fish"}},
 			{Name: "ssh", Args: argv},
@@ -114,7 +114,7 @@ func TestAnUnreadableDestinationKeepsTheMarkUnderARemoteTitle(t *testing.T) {
 
 func TestAPaneWithoutSSHIsUnaffected(t *testing.T) {
 	pane := &state.PaneState{
-		CWD: "/Users/dev/work/dashboard",
+		Dir: "/Users/dev/work/dashboard",
 		Processes: []state.Process{
 			{Name: "fish", Args: []string{"-fish"}},
 			{Name: "nvim", Args: []string{"nvim"}},
@@ -131,7 +131,7 @@ func TestSSHIsFoundAmongOtherProcesses(t *testing.T) {
 	// Herdr lists the foreground process and its descendants, so ssh can be
 	// anywhere in the list.
 	pane := &state.PaneState{
-		CWD: "/Users/dev/work/dashboard",
+		Dir: "/Users/dev/work/dashboard",
 		Processes: []state.Process{
 			{Name: "fish", Args: []string{"-fish"}},
 			{Name: "ssh", Args: []string{"ssh", "prod-01"}},

@@ -16,8 +16,9 @@ import (
 type PaneState struct {
 	ID string
 
-	CWD           string
-	ForegroundCWD string
+	// Dir is the directory this pane speaks for, already chosen between the
+	// shell's and the foreground process's.
+	Dir string
 	// TerminalTitle is Herdr's cleaned title; TerminalTitleRaw still carries
 	// escapes and decorative prefixes and is only a fallback.
 	TerminalTitle    string
@@ -57,8 +58,7 @@ func PaneFrom(info herdr.PaneInfo, processes []herdr.PaneProcessInfoProcess,
 ) *PaneState {
 	return &PaneState{
 		ID:               info.PaneID,
-		CWD:              info.CWD,
-		ForegroundCWD:    info.ForegroundCWD,
+		Dir:              info.Dir(),
 		TerminalTitle:    info.TerminalTitleStripped,
 		TerminalTitleRaw: info.TerminalTitle,
 		Agent:            info.Agent,

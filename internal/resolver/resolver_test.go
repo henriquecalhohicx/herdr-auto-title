@@ -13,7 +13,7 @@ func tabWithCWD(dir string) state.TabState {
 	return state.TabState{
 		ID: "wE:t1",
 		Panes: map[string]*state.PaneState{
-			"wE:p1": {ID: "wE:p1", CWD: dir, Focused: true},
+			"wE:p1": {ID: "wE:p1", Dir: dir, Focused: true},
 		},
 	}
 }
@@ -51,12 +51,12 @@ func TestResolveFromCWD(t *testing.T) {
 	}
 }
 
-func TestResolveFallsBackToForegroundCWD(t *testing.T) {
+func TestResolveNamesATabAfterItsDirectory(t *testing.T) {
 	r := New(DefaultMaxLength, NewCWD())
 	tab := state.TabState{
 		ID: "wE:t1",
 		Panes: map[string]*state.PaneState{
-			"wE:p1": {ID: "wE:p1", ForegroundCWD: "/Users/dev/work/api", Focused: true},
+			"wE:p1": {ID: "wE:p1", Dir: "/Users/dev/work/api", Focused: true},
 		},
 	}
 
@@ -89,9 +89,9 @@ func TestResolveIsDeterministic(t *testing.T) {
 	tab := state.TabState{
 		ID: "wE:t1",
 		Panes: map[string]*state.PaneState{
-			"wE:p1": {ID: "wE:p1", CWD: "/Users/dev/work/dashboard"},
-			"wE:p2": {ID: "wE:p2", CWD: "/Users/dev/work/api"},
-			"wE:p3": {ID: "wE:p3", CWD: "/Users/dev/work/infra"},
+			"wE:p1": {ID: "wE:p1", Dir: "/Users/dev/work/dashboard"},
+			"wE:p2": {ID: "wE:p2", Dir: "/Users/dev/work/api"},
+			"wE:p3": {ID: "wE:p3", Dir: "/Users/dev/work/infra"},
 		},
 	}
 
@@ -160,7 +160,7 @@ func TestATabDoesNotRepeatItsWorkspace(t *testing.T) {
 	// Herdr shows the workspace above its tabs, so a tab in the workspace it is
 	// named after spends half its width saying what is already on screen.
 	tab := tabWithPane(&state.PaneState{
-		CWD:           "/Users/dev/work/dashboard",
+		Dir:           "/Users/dev/work/dashboard",
 		TerminalTitle: "Fix OAuth redirect",
 	})
 	tab.WorkspaceName = "dashboard"
@@ -174,7 +174,7 @@ func TestATabDoesNotRepeatItsWorkspace(t *testing.T) {
 func TestATabWithNothingElseKeepsItsContext(t *testing.T) {
 	// Dropping it here would leave the tab with no name at all, which loses
 	// more than it saves.
-	tab := tabWithPane(&state.PaneState{CWD: "/Users/dev/work/dashboard"})
+	tab := tabWithPane(&state.PaneState{Dir: "/Users/dev/work/dashboard"})
 	tab.WorkspaceName = "dashboard"
 
 	got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(tab)
@@ -187,7 +187,7 @@ func TestADifferentWorkspaceIsNotDropped(t *testing.T) {
 	// A tab whose directory left its workspace behind is exactly the tab that
 	// needs to say where it is.
 	tab := tabWithPane(&state.PaneState{
-		CWD:           "/Users/dev/work/dashboard",
+		Dir:           "/Users/dev/work/dashboard",
 		TerminalTitle: "Fix OAuth redirect",
 	})
 	tab.WorkspaceName = "api"
@@ -201,7 +201,7 @@ func TestADifferentWorkspaceIsNotDropped(t *testing.T) {
 func TestAWorkspaceWithoutAName(t *testing.T) {
 	// An unnamed workspace must not make every context look like a repeat.
 	tab := tabWithPane(&state.PaneState{
-		CWD:           "/Users/dev/work/dashboard",
+		Dir:           "/Users/dev/work/dashboard",
 		TerminalTitle: "Fix OAuth redirect",
 	})
 

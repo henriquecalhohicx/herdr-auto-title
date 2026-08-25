@@ -45,7 +45,7 @@ func TestTabFromKeepsItsLabel(t *testing.T) {
 		herdr.TabInfo{TabID: "wE:t1", Label: "dashboard"},
 		"dashboard",
 		1,
-		[]*PaneState{{ID: "wE:p1", CWD: "/work/dashboard"}},
+		[]*PaneState{{ID: "wE:p1", Dir: "/work/dashboard"}},
 	)
 
 	if tab.CurrentName != "dashboard" {
@@ -57,8 +57,8 @@ func TestTabFromKeepsItsLabel(t *testing.T) {
 	if tab.DefaultName != "1" {
 		t.Errorf("default name = %q, want the tab's position 1", tab.DefaultName)
 	}
-	if pane := tab.Panes["wE:p1"]; pane == nil || pane.CWD != "/work/dashboard" {
-		t.Errorf("pane wE:p1 = %+v, want cwd /work/dashboard", pane)
+	if pane := tab.Panes["wE:p1"]; pane == nil || pane.Dir != "/work/dashboard" {
+		t.Errorf("pane wE:p1 = %+v, want dir /work/dashboard", pane)
 	}
 }
 
@@ -193,5 +193,23 @@ func TestAgentIsActiveOnANilPane(t *testing.T) {
 	var pane *PaneState
 	if pane.HasAgent() || pane.AgentIsActive() {
 		t.Fatal("a nil pane reported an agent")
+	}
+}
+
+func TestPaneFromPrefersTheShellsDirectory(t *testing.T) {
+	// foreground_cwd follows whatever is running right now, so it only speaks
+	// when the shell's own directory is missing.
+	both := PaneFrom(herdr.PaneInfo{
+		PaneID: "wE:p1", CWD: "/work/dashboard", ForegroundCWD: "/tmp",
+	}, nil, git.Checkout{}, time.Now())
+	if both.Dir != "/work/dashboard" {
+		t.Errorf("dir = %q, want the shell's own", both.Dir)
+	}
+
+	foreground := PaneFrom(herdr.PaneInfo{
+		PaneID: "wE:p1", ForegroundCWD: "/work/api",
+	}, nil, git.Checkout{}, time.Now())
+	if foreground.Dir != "/work/api" {
+		t.Errorf("dir = %q, want the foreground process's", foreground.Dir)
 	}
 }

@@ -18,7 +18,7 @@ func running(names ...string) []state.Process {
 func TestTheKindQualifiesTheTitle(t *testing.T) {
 	// The editor names itself in its own title; under the kind that is noise.
 	pane := &state.PaneState{
-		CWD:           "/Users/dev/work/dashboard",
+		Dir:           "/Users/dev/work/dashboard",
 		TerminalTitle: "auth.provider.ts - Nvim",
 		Processes:     running("nvim"),
 	}
@@ -32,7 +32,7 @@ func TestTheKindQualifiesTheTitle(t *testing.T) {
 func TestAKindWithNothingToAddStandsAlone(t *testing.T) {
 	// Neovim showing a file manager titles the window after itself alone.
 	pane := &state.PaneState{
-		CWD:           "/Users/dev/work/dashboard",
+		Dir:           "/Users/dev/work/dashboard",
 		TerminalTitle: "Nvim",
 		Processes:     running("nvim"),
 	}
@@ -44,7 +44,7 @@ func TestAKindWithNothingToAddStandsAlone(t *testing.T) {
 }
 
 func TestAKindWithNoTitleAtAllStillNamesThePane(t *testing.T) {
-	pane := &state.PaneState{CWD: "/Users/dev/work/dashboard", Processes: running("htop")}
+	pane := &state.PaneState{Dir: "/Users/dev/work/dashboard", Processes: running("htop")}
 
 	got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(tabWithPane(pane))
 	if want := "dashboard › htop"; got.Name != want {
@@ -88,7 +88,7 @@ func TestARemoteSessionIsNotNamedTwice(t *testing.T) {
 	// ssh is marked on the host, where the mark cannot be outranked. Repeating
 	// it in the activity would read `ssh › prod-01 › ssh`.
 	pane := &state.PaneState{
-		CWD:       "/Users/dev/work/dashboard",
+		Dir:       "/Users/dev/work/dashboard",
 		Processes: []state.Process{{Name: "ssh", Args: []string{"ssh", "prod-01"}}},
 	}
 
@@ -121,7 +121,7 @@ func TestAProjectNeverTakesAColon(t *testing.T) {
 	// The rule the format rests on: a colon binds a kind to its detail, and a
 	// project is a place rather than a kind.
 	pane := &state.PaneState{
-		CWD:           "/Users/dev/work/self-care-portal",
+		Dir:           "/Users/dev/work/self-care-portal",
 		TerminalTitle: "yarn dev",
 		Processes:     running("esbuild", "node", "node"),
 	}
@@ -143,7 +143,7 @@ func TestAnAgentIsItsOwnKind(t *testing.T) {
 	// agent shows up as a caffeinate, several nodes and an MCP helper, with its
 	// own name nowhere among them.
 	pane := &state.PaneState{
-		CWD:           "/Users/dev/work/dashboard",
+		Dir:           "/Users/dev/work/dashboard",
 		TerminalTitle: "Git email configuration",
 		Agent:         "claude",
 		Processes:     running("caffeinate", "node", "node", "fff-mcp"),
@@ -162,7 +162,7 @@ func TestAStartingAgentIsNamedByItsKindAlone(t *testing.T) {
 	// Claude Code titles its window after itself until the conversation has a
 	// subject. That is generic as an activity, and exactly right as a kind.
 	pane := &state.PaneState{
-		CWD:           "/Users/dev/work/dashboard",
+		Dir:           "/Users/dev/work/dashboard",
 		TerminalTitle: "Claude Code",
 		Agent:         "claude",
 	}
@@ -174,7 +174,7 @@ func TestAStartingAgentIsNamedByItsKindAlone(t *testing.T) {
 }
 
 func TestAPaneWithoutAnAgentIsNotNamedAfterOne(t *testing.T) {
-	pane := &state.PaneState{CWD: "/Users/dev/work/dashboard", TerminalTitle: "Claude Code"}
+	pane := &state.PaneState{Dir: "/Users/dev/work/dashboard", TerminalTitle: "Claude Code"}
 
 	if got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(tabWithPane(pane)); got.Name != "dashboard" {
 		t.Errorf("name = %q, want dashboard", got.Name)

@@ -33,14 +33,7 @@ func (c CWD) Resolve(pane *state.PaneState) (Parts, bool) {
 		return Parts{}, false
 	}
 
-	// The shell's own directory names the project more stably than the
-	// foreground process's, which follows whatever is currently running.
-	dir := pane.CWD
-	if dir == "" {
-		dir = pane.ForegroundCWD
-	}
-
-	name := c.base(dir)
+	name := c.base(pane.Dir)
 	if name == "" {
 		return Parts{}, false
 	}
