@@ -26,11 +26,10 @@ func discardLogger() *slog.Logger {
 type harness struct {
 	t      *testing.T
 	client *herdr.StubClient
-	done   chan error
+	done   chan struct{}
 	cancel context.CancelFunc
 
 	stopped bool
-	stopErr error
 }
 
 func start(t *testing.T, tabs []herdr.TabInfo, panes []herdr.PaneInfo) *harness {
@@ -46,28 +45,27 @@ func startWith(t *testing.T, client *herdr.StubClient) *harness {
 	app := New(testConfig(), discardLogger(), resolver.Default(resolver.DefaultMaxLength))
 
 	ctx, cancel := context.WithCancel(context.Background())
-	h := &harness{t: t, client: client, done: make(chan error, 1), cancel: cancel}
-	go func() { h.done <- app.Run(ctx, client) }()
+	h := &harness{t: t, client: client, done: make(chan struct{}), cancel: cancel}
+	go func() { app.Run(ctx, client); close(h.done) }()
 
 	t.Cleanup(func() { h.stop() })
 	return h
 }
 
-// stop cancels the run and reports how it ended. It is safe to call twice, so
-// a test can assert on the outcome and still leave the cleanup in place.
-func (h *harness) stop() error {
+// stop cancels the run and waits for it, failing the test if it does not
+// return. Safe to call twice, so a test can stop early and leave the cleanup.
+func (h *harness) stop() {
 	if h.stopped {
-		return h.stopErr
+		return
 	}
 	h.stopped = true
 
 	h.cancel()
 	select {
-	case h.stopErr = <-h.done:
+	case <-h.done:
 	case <-time.After(5 * time.Second):
 		h.t.Fatal("Run did not return after its context was cancelled")
 	}
-	return h.stopErr
 }
 
 // awaitRenames blocks until at least n renames have been issued.
@@ -306,9 +304,9 @@ func TestRunStopsCleanlyOnCancellation(t *testing.T) {
 	)
 	h.awaitRenames(1)
 
-	if err := h.stop(); err != nil {
-		t.Errorf("Run returned %v, want nil after cancellation", err)
-	}
+	// stop fails the test if Run does not return; there is no outcome besides
+	// having returned, because Run cannot fail.
+	h.stop()
 }
 
 func TestTheMostRecentlyChangedPaneNamesTheTab(t *testing.T) {
@@ -380,8 +378,8 @@ func TestAPaneWhoseProcessesCannotBeReadIsStillNamed(t *testing.T) {
 	app := New(testConfig(), discardLogger(), resolver.Default(resolver.DefaultMaxLength))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	done := make(chan error, 1)
-	go func() { done <- app.Run(ctx, client) }()
+	done := make(chan struct{})
+	go func() { app.Run(ctx, client); close(done) }()
 
 	deadline := time.Now().Add(2 * time.Second)
 	for {

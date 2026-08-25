@@ -5,7 +5,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -49,11 +48,6 @@ func run() error {
 
 	titles := resolver.Default(cfg.MaxLength)
 
-	if err := app.New(cfg, log, titles).Run(ctx, client); err != nil {
-		if errors.Is(err, context.Canceled) {
-			return nil
-		}
-		return err
-	}
+	app.New(cfg, log, titles).Run(ctx, client)
 	return nil
 }

@@ -42,7 +42,7 @@ func New(cfg Config, log *slog.Logger, titles resolver.TitleResolver) *App {
 // Run polls the session until the context is cancelled. Herdr's event stream is
 // deliberately not used, and the measurements that settled that are in
 // docs/architecture/poll-loop.md.
-func (a *App) Run(ctx context.Context, client herdr.Client) error {
+func (a *App) Run(ctx context.Context, client herdr.Client) {
 	// Name what already exists before waiting for the first tick.
 	a.poll(ctx, client)
 
@@ -53,7 +53,7 @@ func (a *App) Run(ctx context.Context, client herdr.Client) error {
 		select {
 		case <-ctx.Done():
 			a.log.Info("shutting down")
-			return nil
+			return
 		case <-ticker.C:
 			a.poll(ctx, client)
 		}
