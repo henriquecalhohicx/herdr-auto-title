@@ -20,7 +20,7 @@ https://github.com/user-attachments/assets/94d9f4f3-b986-4664-a9bc-d078ece4f05e
 
 ## Quick start
 
-> [!IMPORTANT]
+> [!NOTE]
 > Requires Herdr 0.8.2+ and Go 1.24+ on macOS or Linux. Herdr compiles the
 > plugin from source on your machine when it installs it.
 
@@ -28,8 +28,20 @@ https://github.com/user-attachments/assets/94d9f4f3-b986-4664-a9bc-d078ece4f05e
 herdr plugin install kryptamine/herdr-auto-title
 ```
 
-That is the whole setup. Herdr clones the repository, builds the binary and
-starts it; `herdr plugin list` shows it, `herdr plugin disable` turns it off.
+> [!IMPORTANT]
+> Installing does not start the plugin. Plugins are started by the Herdr
+> **server**, and only when it restores a session, so run this once:
+>
+> ```sh
+> herdr server stop   # closes the session; `herdr` brings it back
+> ```
+>
+> Reopening your terminal will not do: that attaches a new client and leaves
+> the server, and your plugin, exactly as they were.
+
+Herdr clones the repository, builds the binary and registers it. Until the
+server has restarted, nothing is renamed. `herdr plugin list` shows the plugin,
+`herdr plugin disable` turns it off.
 
 Working on the plugin rather than using it? [Development](docs/development.md)
 covers linking a local checkout, which Herdr makes you unlink before `install`
