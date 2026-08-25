@@ -111,57 +111,90 @@ func Default(maxLength, branchMax int) *Deterministic {
 	)
 }
 
-// Resolve walks the sources in priority order. Each field is filled by the
-// first source that supplies it, so a lower-priority source can complete a
-// title without overriding what a higher-priority source already decided.
+// Resolve names a tab in three steps: ask the sources what they see, drop the
+// parts that only repeat something already on screen, and assemble the rest.
 func (d *Deterministic) Resolve(_ context.Context, tab state.TabState) Decision {
-	pane := state.SelectContextPane(tab)
+	found := d.collect(state.SelectContextPane(tab))
+	found.parts = withoutRepetition(found.parts, tab.WorkspaceName)
 
-	var (
-		parts      Parts
-		reason     string
-		confidence int
-	)
+	name := Format(found.parts, d.maxLength)
+	if name == "" {
+		return Decision{Name: GenericFallback, Confidence: ConfidenceFallback, Reason: "generic_fallback"}
+	}
+	return Decision{Name: name, Confidence: found.confidence, Reason: found.reason}
+}
 
+// collected is what the chain produced: the parts of a title, and the source
+// that answers for it.
+type collected struct {
+	parts      Parts
+	reason     string
+	confidence int
+}
+
+// collect walks the sources in ladder order, filling each field with the first
+// source that supplies it.
+//
+// The two fields are filled independently, so a source low on the ladder can
+// complete a title a higher one only half answered: an agent says what a tab is
+// doing, and the working directory still says where.
+func (d *Deterministic) collect(pane *state.PaneState) collected {
+	var found collected
 	for _, source := range d.sources {
-		got, ok := source.Resolve(pane)
+		parts, ok := source.Resolve(pane)
 		if !ok {
 			continue
 		}
-		if parts.Activity == "" && got.Activity != "" {
-			parts.Activity = got.Activity
-			reason = source.Name()
-			confidence = source.Confidence()
-		}
-		if parts.Context == "" && got.Context != "" {
-			parts.Context = got.Context
-			if reason == "" {
-				reason = source.Name()
-				confidence = source.Confidence()
-			}
-		}
-		if parts.Context != "" && parts.Activity != "" {
+		found.take(source, parts)
+		if found.complete() {
 			break
 		}
 	}
+	return found
+}
 
-	// A shell that titles its window after the directory would otherwise
-	// produce "dashboard › dashboard".
+// take fills whatever this source supplies and nothing already has.
+func (c *collected) take(source Source, parts Parts) {
+	// The activity is what a title is about, so its source answers for the
+	// title whenever one turns up. A context is credited only while no activity
+	// has been found.
+	if c.parts.Activity == "" && parts.Activity != "" {
+		c.parts.Activity = parts.Activity
+		c.credit(source)
+	}
+	if c.parts.Context == "" && parts.Context != "" {
+		c.parts.Context = parts.Context
+		if c.reason == "" {
+			c.credit(source)
+		}
+	}
+}
+
+func (c *collected) credit(source Source) {
+	c.reason = source.Name()
+	c.confidence = source.Confidence()
+}
+
+func (c collected) complete() bool {
+	return c.parts.Context != "" && c.parts.Activity != ""
+}
+
+// withoutRepetition drops the parts of a title that only say again what the
+// reader can already see.
+func withoutRepetition(parts Parts, workspace string) Parts {
+	// A shell that titles its window after its directory would otherwise
+	// produce `dashboard › dashboard`.
 	if strings.EqualFold(parts.Activity, parts.Context) {
 		parts.Activity = ""
 	}
 
 	// Herdr shows the workspace above its tabs, so a tab in the workspace it is
-	// named after spends half its width saying what is already on screen. It is
-	// dropped only when something else remains: a tab reduced to nothing has
+	// named after spends half its width repeating what is already on screen.
+	// Dropped only when something else remains: a tab reduced to nothing has
 	// lost more than it saved.
-	if parts.Activity != "" && strings.EqualFold(parts.Context, tab.WorkspaceName) {
+	if parts.Activity != "" && strings.EqualFold(parts.Context, workspace) {
 		parts.Context = ""
 	}
 
-	name := Format(parts, d.maxLength)
-	if name == "" {
-		return Decision{Name: GenericFallback, Confidence: ConfidenceFallback, Reason: "generic_fallback"}
-	}
-	return Decision{Name: name, Confidence: confidence, Reason: reason}
+	return parts
 }
