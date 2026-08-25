@@ -8,6 +8,7 @@ package state
 
 import (
 	"sort"
+	"strconv"
 	"time"
 
 	"herdr-auto-title/internal/herdr"
@@ -109,7 +110,10 @@ type TabState struct {
 	// WorkspaceName is the label Herdr shows above this tab. A tab does not
 	// need to repeat what the workspace already says.
 	WorkspaceName string
-	Panes         map[string]*PaneState
+	// DefaultName is the label Herdr gives a tab nobody has named: its number.
+	// A tab still carrying it has not been claimed by anyone.
+	DefaultName string
+	Panes       map[string]*PaneState
 }
 
 // TabFrom builds tab state from what a read returned.
@@ -118,6 +122,7 @@ func TabFrom(info herdr.TabInfo, workspaceName string, panes []*PaneState) TabSt
 		ID:            info.TabID,
 		CurrentName:   info.Label,
 		WorkspaceName: workspaceName,
+		DefaultName:   strconv.FormatUint(info.Number, 10),
 		Panes:         make(map[string]*PaneState, len(panes)),
 	}
 	for _, pane := range panes {

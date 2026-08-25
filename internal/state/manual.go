@@ -16,12 +16,20 @@ import (
 // changed between two polls. A tab is the user's work when its label moved to
 // something Auto Title neither set nor would have set.
 //
-// The first sighting of a tab never locks it. Without that rule, starting the
-// plugin locks every tab whose label does not already match what the resolver
-// would produce — which is most of them, and the whole session at once.
+// The first poll never locks anything. Without that rule, starting the plugin
+// claims every tab whose label does not already match what the resolver would
+// produce — which is most of them, and the whole session at once.
+//
+// That rule is about the first poll, not about each tab's first sighting. A tab
+// that turns up later is new, and Herdr names a new tab after its number: a new
+// tab already carrying something else was named by the person who made it,
+// possibly in the half-second before the first poll could see it.
 type Manual struct {
 	mu   sync.Mutex
 	path string
+	// settled is false until the first poll has finished, while every tab is
+	// being seen for the first time and none can be judged.
+	settled bool
 	// seen is the label each tab carried when it was last looked at, whether
 	// Auto Title set it or not.
 	seen map[string]string
@@ -79,27 +87,58 @@ func (m *Manual) Locked(tabID string) bool {
 	return locked
 }
 
-// Observe records the label a poll found and reports whether the user put it
+// Sighting is what one poll saw of a tab.
+type Sighting struct {
+	TabID string
+	// Current is the label the tab carries, Desired what the resolver would
+	// name it, and Default what Herdr names a tab nobody has claimed.
+	Current string
+	Desired string
+	Default string
+}
+
+// Observe records what a poll saw and reports whether the user put that label
 // there.
 //
-// It is the user's if the label moved since the last look and is not what the
-// resolver would now produce. Both halves are needed: a label that has not
-// moved is nobody's doing, and a label that matches what Auto Title would set
-// is indistinguishable from its own work — and harmless either way.
-func (m *Manual) Observe(tabID, current, desired string) bool {
+// A label the resolver would produce anyway is never the user's — it cannot be
+// told from Auto Title's own work, and is harmless either way. Past that, a
+// label that has moved since the last look was moved by someone, and a tab
+// turning up already named was named before Auto Title first saw it.
+func (m *Manual) Observe(s Sighting) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	previous, known := m.seen[tabID]
-	m.seen[tabID] = current
+	previous, known := m.seen[s.TabID]
+	m.seen[s.TabID] = s.Current
 
-	if !known || current == previous || current == desired {
+	switch {
+	case s.Current == s.Desired:
+		return false
+	case known:
+		if s.Current == previous {
+			// Nothing happened to this tab.
+			return false
+		}
+	case !m.settled:
+		// The first poll, where every tab is new to Auto Title and almost none
+		// carries a name it has set.
+		return false
+	case s.Current == s.Default:
+		// Herdr made this tab and nobody has named it.
 		return false
 	}
 
-	m.locked[tabID] = current
+	m.locked[s.TabID] = s.Current
 	m.saveLocked()
 	return true
+}
+
+// Settled marks the end of a poll. Only the first one matters: after it, a tab
+// Auto Title has never seen is a tab that did not exist before.
+func (m *Manual) Settled() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.settled = true
 }
 
 // Applied records a label Auto Title has just set, so the next poll does not

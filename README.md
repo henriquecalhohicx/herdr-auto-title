@@ -90,9 +90,12 @@ There is no scrollback scanning and no LLM.
   resolver would produce was put there by you, and the tab is left alone from
   then on. Both halves matter: a label that has not moved is nobody's doing, and
   one that matches what Auto Title would set is indistinguishable from its own
-  work. The first poll of a tab never locks it — every tab starts out carrying a
+  work. The *first poll* never locks anything — every tab starts out carrying a
   label that is not yet the right one, so locking on that would claim the whole
-  session at startup.
+  session at startup. After that, a tab Auto Title has never seen is one that
+  did not exist before, and Herdr names a new tab after its number: a new tab
+  already carrying something else was named by whoever made it, even if that
+  happened in the half-second before the poll that first saw it.
 - **Deduplication.** The snapshot reports each tab's current label, and a rename
   is skipped when the resolved title already equals it. This is what keeps the
   loop quiet, and what stops a rename from provoking the next one.

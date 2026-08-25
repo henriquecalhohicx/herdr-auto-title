@@ -109,7 +109,8 @@ func TestATabAppearingLaterIsNamed(t *testing.T) {
 	h := start(t, nil, nil)
 	h.awaitPolls(1)
 
-	h.client.SetTab(herdr.TabInfo{TabID: "wE:t1", Label: "1"})
+	// A tab Herdr has just made carries its number and nothing else.
+	h.client.SetTab(herdr.TabInfo{TabID: "wE:t1", Label: "1", Number: 1})
 	h.client.SetPane(herdr.PaneInfo{
 		PaneID: "wE:p1", TabID: "wE:t1", Focused: true,
 		CWD:                   "/Users/dev/work/dashboard",
@@ -434,5 +435,44 @@ func TestNoTabIsLockedOnTheFirstPoll(t *testing.T) {
 	labels := map[string]bool{renames[0].Label: true, renames[1].Label: true}
 	if !labels["dashboard"] || !labels["api"] {
 		t.Errorf("renames = %v, want both tabs named", renames)
+	}
+}
+
+func TestATabCreatedAndNamedBeforeTheNextPollIsLeftAlone(t *testing.T) {
+	// The reported failure: a tab made and named in the half-second before the
+	// poll that would first see it. Auto Title never saw it carrying its
+	// number, so the name on it is not Auto Title's.
+	h := start(t,
+		[]herdr.TabInfo{{TabID: "wE:t1", Label: "1", Number: 1}},
+		[]herdr.PaneInfo{{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true}},
+	)
+	h.awaitRenames(1)
+
+	h.client.SetTab(herdr.TabInfo{TabID: "wE:t9", Label: "My thing", Number: 9})
+	h.client.SetPane(herdr.PaneInfo{PaneID: "wE:p9", TabID: "wE:t9", CWD: "/Users/dev/work/api", Focused: true})
+
+	h.awaitPolls(h.client.Polls() + 4)
+	for _, rename := range h.client.Renames() {
+		if rename.TabID == "wE:t9" {
+			t.Fatalf("renamed a tab the user had already named: %+v", rename)
+		}
+	}
+}
+
+func TestATabCreatedWithoutANameIsNamed(t *testing.T) {
+	// The other half: Herdr names a new tab after its number, and that is not
+	// somebody's choice.
+	h := start(t,
+		[]herdr.TabInfo{{TabID: "wE:t1", Label: "1", Number: 1}},
+		[]herdr.PaneInfo{{PaneID: "wE:p1", TabID: "wE:t1", CWD: "/Users/dev/work/dashboard", Focused: true}},
+	)
+	h.awaitRenames(1)
+
+	h.client.SetTab(herdr.TabInfo{TabID: "wE:t9", Label: "9", Number: 9})
+	h.client.SetPane(herdr.PaneInfo{PaneID: "wE:p9", TabID: "wE:t9", CWD: "/Users/dev/work/api", Focused: true})
+
+	renames := h.awaitRenames(2)
+	if got := renames[len(renames)-1]; got.TabID != "wE:t9" || got.Label != "api" {
+		t.Errorf("rename = %+v, want {wE:t9 api}", got)
 	}
 }

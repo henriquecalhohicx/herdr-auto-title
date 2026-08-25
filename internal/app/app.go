@@ -97,7 +97,12 @@ func (a *App) poll(ctx context.Context, client herdr.Client) error {
 		}
 
 		decision := a.titles.Resolve(ctx, tab)
-		if a.manual.Observe(tab.ID, tab.CurrentName, decision.Name) {
+		if a.manual.Observe(state.Sighting{
+			TabID:   tab.ID,
+			Current: tab.CurrentName,
+			Desired: decision.Name,
+			Default: tab.DefaultName,
+		}) {
 			a.log.Info("leaving a tab the user renamed", "tab_id", tab.ID, "name", tab.CurrentName)
 			continue
 		}
@@ -127,6 +132,8 @@ func (a *App) poll(ctx context.Context, client herdr.Client) error {
 			"confidence", decision.Confidence,
 		)
 	}
+
+	a.manual.Settled()
 	return nil
 }
 

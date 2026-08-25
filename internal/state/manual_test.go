@@ -8,29 +8,63 @@ import (
 
 func newManual(t *testing.T) *Manual {
 	t.Helper()
-	return LoadManual(filepath.Join(t.TempDir(), "manual-names.json"))
+	m := LoadManual(filepath.Join(t.TempDir(), "manual-names.json"))
+	// Most tests are about a session already under way.
+	m.Settled()
+	return m
 }
 
-func TestTheFirstSightingNeverLocks(t *testing.T) {
+// sighting is the common case: a tab Herdr made and numbered.
+func sighting(tabID, current, desired string) Sighting {
+	return Sighting{TabID: tabID, Current: current, Desired: desired, Default: "1"}
+}
+
+func TestTheFirstPollNeverLocks(t *testing.T) {
 	// The trap this rule exists for: on the first poll almost every tab carries
 	// a label that is not yet what the resolver would produce. Locking on that
 	// would claim the whole session the moment the plugin starts.
+	m := LoadManual("")
+
+	for _, s := range []Sighting{
+		{TabID: "wE:t1", Current: "1", Desired: "dashboard", Default: "1"},
+		{TabID: "wE:t2", Current: "Important work", Desired: "api", Default: "2"},
+		{TabID: "wE:t3", Current: "nvim › stale.go", Desired: "nvim › fresh.go", Default: "3"},
+	} {
+		if m.Observe(s) {
+			t.Errorf("tab %s was locked on the first poll", s.TabID)
+		}
+	}
+}
+
+func TestATabTurningUpAlreadyNamedIsTheUsers(t *testing.T) {
+	// The case that made this rule necessary: a tab created and named faster
+	// than the next poll. Auto Title never saw it carrying its number, so the
+	// name it carries is not Auto Title's.
 	m := newManual(t)
 
-	if m.Observe("wE:t1", "1", "dashboard") {
-		t.Error("a tab was locked on the poll that first saw it")
+	if !m.Observe(Sighting{TabID: "wE:t9", Current: "My thing", Desired: "dashboard", Default: "9"}) {
+		t.Fatal("a tab that appeared already named was not read as the user's")
 	}
-	if m.Locked("wE:t1") {
-		t.Error("the tab is locked")
+	if !m.Locked("wE:t9") {
+		t.Error("the tab is not locked")
+	}
+}
+
+func TestATabTurningUpUnnamedIsNotTheUsers(t *testing.T) {
+	// Herdr names a new tab after its number. Nobody has claimed this one.
+	m := newManual(t)
+
+	if m.Observe(Sighting{TabID: "wE:t9", Current: "9", Desired: "dashboard", Default: "9"}) {
+		t.Error("an unnamed new tab was locked")
 	}
 }
 
 func TestARenameByTheUserLocksTheTab(t *testing.T) {
 	m := newManual(t)
-	m.Observe("wE:t1", "1", "dashboard")
+	m.Observe(sighting("wE:t1", "1", "dashboard"))
 	m.Applied("wE:t1", "dashboard")
 
-	if !m.Observe("wE:t1", "Important work", "dashboard") {
+	if !m.Observe(sighting("wE:t1", "Important work", "dashboard")) {
 		t.Fatal("a label the plugin neither set nor wanted was not read as the user's")
 	}
 	if !m.Locked("wE:t1") {
@@ -40,20 +74,20 @@ func TestARenameByTheUserLocksTheTab(t *testing.T) {
 
 func TestARenameByThePluginDoesNotLock(t *testing.T) {
 	m := newManual(t)
-	m.Observe("wE:t1", "1", "dashboard")
+	m.Observe(sighting("wE:t1", "1", "dashboard"))
 	m.Applied("wE:t1", "dashboard")
 
-	if m.Observe("wE:t1", "dashboard", "dashboard") {
+	if m.Observe(sighting("wE:t1", "dashboard", "dashboard")) {
 		t.Error("the plugin's own rename was read as the user's")
 	}
 }
 
 func TestALabelThatHasNotMovedIsNobodysDoing(t *testing.T) {
 	m := newManual(t)
-	m.Observe("wE:t1", "Important work", "dashboard")
+	m.Observe(sighting("wE:t1", "Important work", "dashboard"))
 
 	// Same label on the next poll: nothing happened, whatever it says.
-	if m.Observe("wE:t1", "Important work", "dashboard") {
+	if m.Observe(sighting("wE:t1", "Important work", "dashboard")) {
 		t.Error("an unchanged label was read as a rename")
 	}
 }
@@ -61,9 +95,9 @@ func TestALabelThatHasNotMovedIsNobodysDoing(t *testing.T) {
 func TestALabelMatchingWhatWeWouldSetDoesNotLock(t *testing.T) {
 	// Indistinguishable from the plugin's own work, and harmless either way.
 	m := newManual(t)
-	m.Observe("wE:t1", "1", "dashboard")
+	m.Observe(sighting("wE:t1", "1", "dashboard"))
 
-	if m.Observe("wE:t1", "dashboard", "dashboard") {
+	if m.Observe(sighting("wE:t1", "dashboard", "dashboard")) {
 		t.Error("a label matching the resolved one locked the tab")
 	}
 }
@@ -72,8 +106,8 @@ func TestLocksSurviveAReload(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "manual-names.json")
 
 	m := LoadManual(path)
-	m.Observe("wE:t1", "1", "dashboard")
-	if !m.Observe("wE:t1", "Important work", "dashboard") {
+	m.Observe(sighting("wE:t1", "1", "dashboard"))
+	if !m.Observe(sighting("wE:t1", "Important work", "dashboard")) {
 		t.Fatal("the tab was not locked")
 	}
 
@@ -89,8 +123,8 @@ func TestAReloadedLockIsReleasedWhenTheLabelMovedOn(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "manual-names.json")
 
 	m := LoadManual(path)
-	m.Observe("wE:t1", "1", "dashboard")
-	m.Observe("wE:t1", "Important work", "dashboard")
+	m.Observe(sighting("wE:t1", "1", "dashboard"))
+	m.Observe(sighting("wE:t1", "Important work", "dashboard"))
 
 	reloaded := LoadManual(path)
 	reloaded.Retain(map[string]string{"wE:t1": "2"})
@@ -104,17 +138,18 @@ func TestAReloadedLockIsReleasedWhenTheLabelMovedOn(t *testing.T) {
 
 func TestRetainDropsTabsTheSessionNoLongerHolds(t *testing.T) {
 	m := newManual(t)
-	m.Observe("wE:t1", "1", "dashboard")
-	m.Observe("wE:t1", "Important work", "dashboard")
+	m.Observe(sighting("wE:t1", "1", "dashboard"))
+	m.Observe(sighting("wE:t1", "Important work", "dashboard"))
 
 	m.Retain(map[string]string{})
 	if m.Locked("wE:t1") {
 		t.Error("a closed tab is still locked")
 	}
 
-	// Its baseline went too, so a tab reusing the id starts clean.
-	if m.Observe("wE:t1", "something else", "dashboard") {
-		t.Error("a tab reusing the id was locked without a baseline")
+	// Its baseline went too, so a tab reusing the id starts clean and is
+	// judged on what it carries rather than on what the old tab did.
+	if m.Observe(Sighting{TabID: "wE:t1", Current: "1", Desired: "dashboard", Default: "1"}) {
+		t.Error("an unnamed tab reusing the id was locked")
 	}
 }
 
@@ -130,17 +165,17 @@ func TestAnUnreadableStoreIsNotFatal(t *testing.T) {
 		t.Error("a corrupt store produced a lock")
 	}
 	// And it still works from there.
-	m.Observe("wE:t1", "1", "dashboard")
-	if !m.Observe("wE:t1", "Important work", "dashboard") {
+	m.Observe(sighting("wE:t1", "1", "dashboard"))
+	if !m.Observe(sighting("wE:t1", "Important work", "dashboard")) {
 		t.Error("locking stopped working after a corrupt store")
 	}
 }
 
 func TestWithoutAPathLocksStayInMemory(t *testing.T) {
 	m := LoadManual("")
-	m.Observe("wE:t1", "1", "dashboard")
+	m.Observe(sighting("wE:t1", "1", "dashboard"))
 
-	if !m.Observe("wE:t1", "Important work", "dashboard") {
+	if !m.Observe(sighting("wE:t1", "Important work", "dashboard")) {
 		t.Error("locking needs a file")
 	}
 	if !m.Locked("wE:t1") {

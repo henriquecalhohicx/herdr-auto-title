@@ -27,6 +27,10 @@ type TabInfo struct {
 	TabID       string `json:"tab_id"`
 	WorkspaceID string `json:"workspace_id"`
 	Label       string `json:"label"`
+	// Number is the tab's position, and also the label Herdr gives a tab
+	// nobody has named. That makes it the difference between a tab that is
+	// merely new and one someone has already claimed.
+	Number uint64 `json:"number"`
 }
 
 // PaneInfo describes a pane. It carries no foreground process name: that is
