@@ -398,7 +398,10 @@ func TestAPaneWhoseProcessesCannotBeReadIsStillNamed(t *testing.T) {
 }
 
 func TestAWorkspaceNameIsNotRepeatedInItsTabs(t *testing.T) {
-	h := start(t,
+	// The workspace has to be in the stub before the loop starts: Run polls
+	// once immediately, and a first poll that has not seen the workspace yet
+	// has nothing to drop, so it renames the tab `dashboard › …`.
+	client := herdr.NewStub(
 		[]herdr.TabInfo{{TabID: "wE:t1", WorkspaceID: "wE", Label: "1"}},
 		[]herdr.PaneInfo{{
 			PaneID: "wE:p1", TabID: "wE:t1", Focused: true,
@@ -406,7 +409,8 @@ func TestAWorkspaceNameIsNotRepeatedInItsTabs(t *testing.T) {
 			TerminalTitleStripped: "Fix OAuth redirect",
 		}},
 	)
-	h.client.SetWorkspaces(herdr.WorkspaceInfo{WorkspaceID: "wE", Label: "dashboard"})
+	client.SetWorkspaces(herdr.WorkspaceInfo{WorkspaceID: "wE", Label: "dashboard"})
+	h := startWith(t, client)
 
 	renames := h.awaitRenames(1)
 	if got := renames[len(renames)-1].Label; got != "Fix OAuth redirect" {
