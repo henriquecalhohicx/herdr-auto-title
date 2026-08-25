@@ -79,7 +79,8 @@ When a decision genuinely needs a paragraph, write the paragraph in
 
 ```sh
 make            # list every target
-make check      # fmt + vet + go test -race   ← the gate before any commit
+make check      # fmt + vet + lint + test   ← the gate before any commit
+make lint       # golangci-lint, pinned in tools/go.mod
 make test       # go test -race ./...
 make run        # build and run in the current Herdr session, DEBUG logging
 make dev        # the same, restarting on every source change
@@ -93,6 +94,11 @@ make probe-snapshot # the session snapshot the plugin polls
 `go test -race` is the gate, not `go test`: the poll loop and the change history
 it keeps are exercised concurrently in tests, and a future reset action will
 touch that history from outside the loop.
+
+The linter lives in `tools/go.mod`, a module of its own, so its dependency tree
+stays out of the plugin's: the main module keeps one dependency and still builds
+on Go 1.24, which is what Herdr needs at install time. `errcheck` is off — the
+places that swallow an error say why they do.
 
 ## Herdr socket API — verified facts
 

@@ -8,7 +8,7 @@ help: ## List every target
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk -F':.*?## ' '{printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: check
-check: fmt vet test ## Everything that must be green before a commit
+check: fmt vet lint test ## Everything that must be green before a commit
 
 .PHONY: fmt
 fmt: ## Format the code
@@ -17,6 +17,10 @@ fmt: ## Format the code
 .PHONY: vet
 vet: ## Static checks
 	@go vet ./...
+
+.PHONY: lint
+lint: ## golangci-lint, pinned in tools/go.mod
+	@go tool -modfile=tools/go.mod golangci-lint run ./...
 
 .PHONY: test
 test: ## Tests with the race detector

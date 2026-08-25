@@ -6,17 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 )
-
-func discardLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
-}
 
 // incoming is one request as the test server saw it.
 type incoming struct {

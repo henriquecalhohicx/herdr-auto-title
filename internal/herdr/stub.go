@@ -169,7 +169,7 @@ func (s *StubClient) Call(ctx context.Context, method string, params any, result
 		// Herdr's label really does change, so the next poll must agree.
 		tab.Label = rename.Label
 		s.tabs[rename.TabID] = tab
-		s.renames = append(s.renames, RenameCall{TabID: rename.TabID, Label: rename.Label})
+		s.renames = append(s.renames, RenameCall(rename))
 		return nil
 
 	default:

@@ -142,7 +142,7 @@ nothing is running in it that names the pane, so there is no context to use.
 
 ```sh
 make          # list every target
-make check    # fmt + vet + go test -race ./...
+make check    # fmt + vet + lint + test — the gate before any commit
 make run      # build and run in your Herdr session with DEBUG logging
 make dev      # the same, restarting on every source change
 ```

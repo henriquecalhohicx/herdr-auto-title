@@ -21,7 +21,7 @@ need the outer two.
 ```sh
 make test        # go test -race ./...
 make test-v      # the same, verbose
-make check       # fmt + vet + test, run this before every commit
+make check       # fmt + vet + lint + test, run this before every commit
 ```
 
 The suite drives the whole loop through `herdr.StubClient`: the first poll, a
