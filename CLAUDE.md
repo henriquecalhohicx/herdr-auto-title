@@ -102,7 +102,12 @@ listed here** (`make probe-*`, `scripts/probe.py`).
 - `PaneInfo.title` is the agent's own title. It was null for every Claude Code
   pane observed; that agent reports its topic through `terminal_title_stripped`.
 - `agent_status` is `idle | working | blocked | done | unknown`; a pane with no
-  agent reports `unknown`.
+  agent reports `unknown`. `TabInfo` carries one too, aggregated over the tab's
+  panes: with a single Claude Code pane working, its tab reported `working`
+  while every other tab reported `unknown`. How it aggregates two agent panes in
+  one tab has not been probed.
+- `tab.rename` costs 0.16 ms median and 0.21 ms at p95 over forty calls —
+  cheaper than the snapshot that precedes it.
 - `PaneInfo` carries no foreground process name; that needs `pane.process_info`,
   one request per pane at 0.11 ms — cheaper than the snapshot. Its
   `foreground_processes` lists the pane's foreground process *and its
@@ -118,7 +123,8 @@ listed here** (`make probe-*`, `scripts/probe.py`).
   workspace only, not by tab. Neither is needed while the snapshot is one call.
 
 Keep this list current: when a probe teaches you something new, add it here and
-to the README's *Notes on the Herdr socket API*.
+to [docs/architecture/herdr-socket-api.md](docs/architecture/herdr-socket-api.md),
+which carries the same facts in full.
 
 ## Working here
 
@@ -132,5 +138,9 @@ to the README's *Notes on the Herdr socket API*.
   the result away again. The only thing carried between polls is when each pane
   last changed, which a snapshot cannot say.
 - Never pass terminal-derived values to a shell. Renames go over the socket API.
-- The full workflow is in [docs/development.md](docs/development.md); the
-  architecture and configuration are in [README.md](README.md).
+- How the plugin works and why — the poll loop, title resolution, sanitizing
+  untrusted values, manual rename protection — is in
+  [docs/architecture](docs/architecture/). Record a design decision there rather
+  than in the README, which is for people using the plugin.
+- The full workflow is in [docs/development.md](docs/development.md);
+  installation and configuration are in [README.md](README.md).

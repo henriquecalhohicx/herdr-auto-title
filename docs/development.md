@@ -90,6 +90,11 @@ When a probe teaches you something new, add it there.
 
 ## Working through a ticket
 
+Before changing how a title is decided, read
+[architecture/title-resolution.md](architecture/title-resolution.md) — most of
+what looks arbitrary in the resolver is a measurement that overturned something
+the specification assumed.
+
 Tickets live in `docs/issues/` and are ordered by dependency; take any whose
 blockers are done.
 
