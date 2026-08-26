@@ -1,7 +1,7 @@
 ---
 type: doc
 title: 'Title Resolution'
-description: 'How a tab becomes a name: which pane speaks for the tab, the confidence ladder the sources order themselves by, what each source contributes, and the rules that keep a title from repeating itself.'
+description: 'How a tab becomes a name: which pane speaks for the tab, the confidence ladder the sources order themselves by, what each source contributes, the rules that keep a title from repeating itself, and why the tab position rides in front of it.'
 tags: [architecture]
 created: 2026-08-25
 generated: { by: claude-code/opus-5, at: 2026-08-25T12:46:22+03:00 }
@@ -10,16 +10,17 @@ generated: { by: claude-code/opus-5, at: 2026-08-25T12:46:22+03:00 }
 # Title Resolution
 
 A title reads as a path from the general to the particular, with one separator
-throughout:
+throughout, behind the number of the tab it names:
 
 ```
-self-care-portal › nvim › auth.provider.ts
+3 · self-care-portal › nvim › auth.provider.ts
 ```
 
 Where a part came from — a directory, a program, a file — is not something a
 separator can convey, and a second one would only ask the reader to learn a
-distinction they cannot see. So there is exactly one, `Separator`
-(`internal/resolver/sanitize.go`).
+distinction they cannot see. So every part shares one, `Separator`
+(`internal/resolver/sanitize.go`). The number in front is not a part of the
+title, and [carries a mark of its own](#the-position-is-not-a-part-of-the-title).
 
 Structurally a title is three fields, `Parts{Context, Branch, Activity}`
 (`internal/resolver/resolver.go`): *where* the user is and *what* they are
@@ -56,6 +57,8 @@ rather than by the order the sources happen to be listed in
 | 40 | Git branch | `git.go` | Branch |
 | 30 | Working directory | `cwd.go` | Context |
 | 10 | Generic fallback | `resolver.go` | the whole name (`Shell`) |
+
+The tab's position is not on this ladder, and [why is below](#the-position-is-not-a-part-of-the-title).
 
 **A source never overrides a field a higher-priority source already supplied**,
 but a lower one can still complete the other half. That is why the working
@@ -198,3 +201,35 @@ has left its workspace behind is exactly the one that keeps saying where it is.
 A branch counts as something remaining, and the match is against the directory
 alone, so a tab in the workspace of the repository it is in reads `feat/oauth ›
 nvim`: the half that repeats goes, the half that distinguishes stays.
+
+## The position is not a part of the title
+
+Every title carries the tab's place in its workspace in front of it, which is
+the key that switches to that tab: `3 · dashboard › nvim`. Herdr labels an
+unnamed tab with that same position, so naming a tab is what takes the number
+away — and a tab bar of names is a tab bar the user has to count along to reach
+the fourth one.
+
+**It is a decorator, `Numbered` (`internal/resolver/position.go`), not a
+source.** A source answers what a tab is about from what a pane holds; the
+position says nothing about that and comes from the workspace instead. Wrapping
+the resolver keeps the ladder about content, and keeps `Resolve` returning the
+label that will actually be set — which is what the manual-rename bookkeeping
+compares against.
+
+Three things follow from what the tab bar does with a title:
+
+- **The position leads.** Truncation cuts the tail (see
+  [Sanitization](sanitization.md)), so a position at the end is the first thing
+  a long title loses — exactly the titles a user is scanning when they reach
+  for a key. In front it also puts every number in one column.
+- **The mark is `·`, not `›`.** The parts separator would read as if the
+  position were one more thing the title says about the tab.
+- **It is counted against `MaxLength`, not added to it.** The decorator reads
+  that bound off the resolver it wraps rather than being handed one of its own,
+  so there are not two numbers to keep in step. The body is re-sanitized to
+  what the prefix leaves, and truncating an already-truncated title again is
+  the same cut, one column further in. Where nothing would be left — a tab bar
+  narrower than the number itself — the number goes and the name stays.
+
+`HERDR_AUTO_TITLE_POSITION=false` drops the decorator.

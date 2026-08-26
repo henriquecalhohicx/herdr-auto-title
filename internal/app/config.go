@@ -17,6 +17,7 @@ const (
 	EnvPoll      = "HERDR_AUTO_TITLE_POLL_MS"
 	EnvMaxLength = "HERDR_AUTO_TITLE_MAX_LENGTH"
 	EnvBranchMax = "HERDR_AUTO_TITLE_BRANCH_MAX"
+	EnvPosition  = "HERDR_AUTO_TITLE_POSITION"
 	EnvManual    = "HERDR_AUTO_TITLE_MANUAL_FILE"
 )
 
@@ -35,6 +36,9 @@ type Config struct {
 	// BranchMax bounds what a git branch may add to a title. Zero leaves
 	// branches out of titles entirely.
 	BranchMax int
+	// ShowPosition puts each tab's position in front of its title, which is
+	// the key that switches to that tab.
+	ShowPosition bool
 	// ManualPath is where tabs the user renamed by hand are remembered across
 	// restarts. Empty keeps them in memory only.
 	ManualPath string
@@ -45,10 +49,11 @@ type Config struct {
 // plugin from running.
 func LoadConfig() (Config, []string) {
 	cfg := Config{
-		Poll:       DefaultPoll,
-		MaxLength:  resolver.DefaultMaxLength,
-		BranchMax:  resolver.DefaultBranchMaxLength,
-		ManualPath: state.DefaultManualPath(),
+		Poll:         DefaultPoll,
+		MaxLength:    resolver.DefaultMaxLength,
+		BranchMax:    resolver.DefaultBranchMaxLength,
+		ShowPosition: true,
+		ManualPath:   state.DefaultManualPath(),
 	}
 	var warnings []string
 
@@ -57,6 +62,7 @@ func LoadConfig() (Config, []string) {
 	cfg.MaxLength = fromEnv(&warnings, EnvMaxLength, cfg.MaxLength, count)
 	// Zero is meaningful here, and only here: it leaves branches out of titles.
 	cfg.BranchMax = fromEnv(&warnings, EnvBranchMax, cfg.BranchMax, countOrNone)
+	cfg.ShowPosition = fromEnv(&warnings, EnvPosition, cfg.ShowPosition, boolean)
 	// A path needs neither parsing nor checking, so it does not go through
 	// fromEnv: any string the user set is the path they meant.
 	if raw := os.Getenv(EnvManual); raw != "" {

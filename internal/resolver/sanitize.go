@@ -8,9 +8,9 @@ import (
 	"github.com/rivo/uniseg"
 )
 
-// Separator joins every part of a title, and there is only one: where a part
-// came from is not something a separator can convey, and a second kind would
-// ask the reader to learn a distinction they cannot see.
+// Separator joins the parts of a title, and every part shares it: where a part
+// came from is not something a separator can convey. A tab's position is not a
+// part of its title and carries a mark of its own.
 const Separator = " " + separatorRune + " "
 
 const separatorRune = "›"

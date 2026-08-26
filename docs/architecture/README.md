@@ -18,7 +18,7 @@ that settled it.
 | Note | What it covers |
 |------|----------------|
 | [The poll loop](./poll-loop.md) | Why polling beats the event stream, what one poll does, what survives between polls, and how the loop behaves when Herdr is unreachable |
-| [Title resolution](./title-resolution.md) | Which pane speaks for a tab, the confidence ladder, what each source contributes, and why the workspace name is not repeated |
+| [Title resolution](./title-resolution.md) | Which pane speaks for a tab, the confidence ladder, what each source contributes, why the workspace name is not repeated, and why the tab position leads the title |
 | [Sanitizing untrusted values](./sanitization.md) | What is stripped from terminal-derived values, what is rejected as saying nothing, and why the length limit is counted in columns |
 | [Manual rename protection](./manual-rename-protection.md) | Telling your rename from the plugin's own using nothing but successive polls, and what that costs |
 | [Herdr socket API](./herdr-socket-api.md) | The wire protocol and the measured facts about Herdr 0.8.2 that everything else rests on |

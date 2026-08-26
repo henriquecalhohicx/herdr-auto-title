@@ -46,7 +46,11 @@ func run() error {
 		return err
 	}
 
-	titles := resolver.Default(cfg.MaxLength, cfg.BranchMax)
+	chain := resolver.Default(cfg.MaxLength, cfg.BranchMax)
+	var titles resolver.TitleResolver = chain
+	if cfg.ShowPosition {
+		titles = resolver.NewNumbered(chain)
+	}
 
 	app.New(cfg, log, titles).Run(ctx, client)
 	return nil
