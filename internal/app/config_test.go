@@ -12,7 +12,7 @@ import (
 // sets and the environment the tests run in cannot change the outcome.
 func isolate(t *testing.T) {
 	t.Helper()
-	for _, name := range []string{EnvDebug, EnvPoll, EnvMaxLength, EnvManual} {
+	for _, name := range []string{EnvDebug, EnvPoll, EnvMaxLength, EnvBranchMax, EnvManual} {
 		t.Setenv(name, "")
 	}
 }
@@ -33,6 +33,9 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.MaxLength != resolver.DefaultMaxLength {
 		t.Errorf("max length = %d, want %d", cfg.MaxLength, resolver.DefaultMaxLength)
 	}
+	if cfg.BranchMax != resolver.DefaultBranchMaxLength {
+		t.Errorf("branch max = %d, want %d", cfg.BranchMax, resolver.DefaultBranchMaxLength)
+	}
 }
 
 func TestLoadConfigFromEnvironment(t *testing.T) {
@@ -40,6 +43,7 @@ func TestLoadConfigFromEnvironment(t *testing.T) {
 	t.Setenv(EnvDebug, "true")
 	t.Setenv(EnvPoll, "250")
 	t.Setenv(EnvMaxLength, "32")
+	t.Setenv(EnvBranchMax, "20")
 
 	cfg, warnings := LoadConfig()
 	if len(warnings) != 0 {
@@ -54,7 +58,40 @@ func TestLoadConfigFromEnvironment(t *testing.T) {
 	if cfg.MaxLength != 32 {
 		t.Errorf("max length = %d, want 32", cfg.MaxLength)
 	}
-	// Raising the window must raise the cap with it.
+	if cfg.BranchMax != 20 {
+		t.Errorf("branch max = %d, want 20", cfg.BranchMax)
+	}
+}
+
+func TestABranchWidthOfZeroIsAValue(t *testing.T) {
+	// Zero is how branches are turned off, so it must pass where zero is
+	// rejected everywhere else — and without a warning.
+	isolate(t)
+	t.Setenv(EnvBranchMax, "0")
+
+	cfg, warnings := LoadConfig()
+	if len(warnings) != 0 {
+		t.Errorf("warnings = %v, want none", warnings)
+	}
+	if cfg.BranchMax != 0 {
+		t.Errorf("branch max = %d, want 0", cfg.BranchMax)
+	}
+}
+
+func TestANegativeBranchWidthIsRejected(t *testing.T) {
+	isolate(t)
+	t.Setenv(EnvBranchMax, "-1")
+
+	cfg, warnings := LoadConfig()
+	if cfg.BranchMax != resolver.DefaultBranchMaxLength {
+		t.Errorf("branch max = %d, want the default", cfg.BranchMax)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("warnings = %v, want one", warnings)
+	}
+	if !strings.Contains(warnings[0], "cannot be negative") {
+		t.Errorf("warning %q does not say what is wrong", warnings[0])
+	}
 }
 
 func TestLoadConfigKeepsDefaultsOnBadValues(t *testing.T) {

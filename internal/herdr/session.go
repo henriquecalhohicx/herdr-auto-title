@@ -49,6 +49,15 @@ type PaneInfo struct {
 	AgentStatus  string `json:"agent_status"`
 }
 
+// Dir is the directory a pane speaks for. The shell's own is preferred over
+// the foreground process's, which follows whatever is running right now.
+func (p PaneInfo) Dir() string {
+	if p.CWD != "" {
+		return p.CWD
+	}
+	return p.ForegroundCWD
+}
+
 // PaneProcessInfoProcess is one process running in a pane. Herdr reports more
 // about each — its pid, its working directory, the joined command line — but a
 // title is derived from the name and the arguments alone.

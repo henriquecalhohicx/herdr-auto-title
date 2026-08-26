@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/kryptamine/herdr-auto-title/internal/git"
 	"github.com/kryptamine/herdr-auto-title/internal/herdr"
 	"github.com/kryptamine/herdr-auto-title/internal/resolver"
 	"github.com/kryptamine/herdr-auto-title/internal/state"
@@ -201,6 +202,20 @@ func (a *App) processesIn(ctx context.Context, client herdr.Client, paneID strin
 	return processes
 }
 
+// checkoutIn reports what the repository holding the pane has checked out.
+// Unlike a process read it is not cached, and why not is in
+// docs/architecture/title-resolution.md.
+func (a *App) checkoutIn(pane herdr.PaneInfo) git.Checkout {
+	// A branch width of zero is how branches are turned off, and a read whose
+	// answer is thrown away is still a read on every pane twice a second.
+	if a.cfg.BranchMax <= 0 {
+		return git.Checkout{}
+	}
+
+	checkout, _ := git.Read(pane.Dir())
+	return checkout
+}
+
 // tabsIn assembles the snapshot's tabs with their panes. What is running in a
 // pane needs a request of its own, which processesIn makes only when the last
 // answer will no longer do.
@@ -214,7 +229,7 @@ func (a *App) tabsIn(ctx context.Context, client herdr.Client, snapshot herdr.Sn
 	for _, pane := range snapshot.Panes {
 		byTab[pane.TabID] = append(byTab[pane.TabID],
 			state.PaneFrom(pane, a.processesIn(ctx, client, pane.PaneID),
-				a.changes.ChangedAt(pane.PaneID)))
+				a.checkoutIn(pane), a.changes.ChangedAt(pane.PaneID)))
 	}
 
 	// An unnamed tab carries its place in the workspace, and the snapshot lists

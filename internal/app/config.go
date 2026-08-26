@@ -16,6 +16,7 @@ const (
 	EnvDebug     = "HERDR_AUTO_TITLE_DEBUG"
 	EnvPoll      = "HERDR_AUTO_TITLE_POLL_MS"
 	EnvMaxLength = "HERDR_AUTO_TITLE_MAX_LENGTH"
+	EnvBranchMax = "HERDR_AUTO_TITLE_BRANCH_MAX"
 	EnvManual    = "HERDR_AUTO_TITLE_MANUAL_FILE"
 )
 
@@ -28,9 +29,12 @@ const DefaultPoll = 500 * time.Millisecond
 type Config struct {
 	Debug bool
 	Poll  time.Duration
-	// MaxLength is measured in columns of the tab bar rather than in
-	// characters: a CJK character or an emoji takes two.
+	// MaxLength and BranchMax are measured in columns of the tab bar rather
+	// than in characters: a CJK character or an emoji takes two.
 	MaxLength int
+	// BranchMax bounds what a git branch may add to a title. Zero leaves
+	// branches out of titles entirely.
+	BranchMax int
 	// ManualPath is where tabs the user renamed by hand are remembered across
 	// restarts. Empty keeps them in memory only.
 	ManualPath string
@@ -43,6 +47,7 @@ func LoadConfig() (Config, []string) {
 	cfg := Config{
 		Poll:       DefaultPoll,
 		MaxLength:  resolver.DefaultMaxLength,
+		BranchMax:  resolver.DefaultBranchMaxLength,
 		ManualPath: state.DefaultManualPath(),
 	}
 	var warnings []string
@@ -50,6 +55,8 @@ func LoadConfig() (Config, []string) {
 	cfg.Debug = fromEnv(&warnings, EnvDebug, cfg.Debug, boolean)
 	cfg.Poll = fromEnv(&warnings, EnvPoll, cfg.Poll, milliseconds)
 	cfg.MaxLength = fromEnv(&warnings, EnvMaxLength, cfg.MaxLength, count)
+	// Zero is meaningful here, and only here: it leaves branches out of titles.
+	cfg.BranchMax = fromEnv(&warnings, EnvBranchMax, cfg.BranchMax, countOrNone)
 	// A path needs neither parsing nor checking, so it does not go through
 	// fromEnv: any string the user set is the path they meant.
 	if raw := os.Getenv(EnvManual); raw != "" {
@@ -85,6 +92,7 @@ var (
 	errNotBoolean  = errors.New("is not a boolean")
 	errNotNumber   = errors.New("is not a number")
 	errNotPositive = errors.New("must be positive")
+	errNegative    = errors.New("cannot be negative")
 )
 
 func boolean(raw string) (bool, error) {
@@ -104,6 +112,19 @@ func count(raw string) (int, error) {
 	}
 	if value <= 0 {
 		return 0, errNotPositive
+	}
+	return value, nil
+}
+
+// countOrNone reads a number that may be zero, for a setting where zero means
+// "none of this" rather than a value that would stop the plugin working.
+func countOrNone(raw string) (int, error) {
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, errNotNumber
+	}
+	if value < 0 {
+		return 0, errNegative
 	}
 	return value, nil
 }

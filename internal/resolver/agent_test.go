@@ -8,8 +8,8 @@ import (
 )
 
 func TestAgentTitleBeatsEverySourceBelowIt(t *testing.T) {
-	got := Default(DefaultMaxLength).Resolve(tabWithPane(&state.PaneState{
-		CWD:           "/Users/dev/work/dashboard",
+	got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(tabWithPane(&state.PaneState{
+		Dir:           "/Users/dev/work/dashboard",
 		TerminalTitle: "Claude Code",
 		Agent:         "claude",
 		AgentStatus:   herdr.AgentStatusWorking,
@@ -28,8 +28,8 @@ func TestAgentTitleBeatsEverySourceBelowIt(t *testing.T) {
 }
 
 func TestAgentTitleOutranksAMeaningfulTerminalTitle(t *testing.T) {
-	got := Default(DefaultMaxLength).Resolve(tabWithPane(&state.PaneState{
-		CWD:           "/Users/dev/work/dashboard",
+	got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(tabWithPane(&state.PaneState{
+		Dir:           "/Users/dev/work/dashboard",
 		TerminalTitle: "Fix OAuth redirect",
 		Agent:         "claude",
 		AgentStatus:   herdr.AgentStatusWorking,
@@ -46,8 +46,8 @@ func TestGenericAgentNameFallsThrough(t *testing.T) {
 	// topic then arrives through the terminal title instead.
 	for _, title := range []string{"Claude", "Claude Code", "Agent", "Coding Agent", ""} {
 		t.Run(title, func(t *testing.T) {
-			got := Default(DefaultMaxLength).Resolve(tabWithPane(&state.PaneState{
-				CWD:           "/Users/dev/work/dashboard",
+			got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(tabWithPane(&state.PaneState{
+				Dir:           "/Users/dev/work/dashboard",
 				TerminalTitle: "Fix OAuth redirect",
 				Agent:         "claude",
 				AgentStatus:   herdr.AgentStatusWorking,
@@ -69,7 +69,7 @@ func TestAgentEchoingItsOwnNameIsNotAgentContext(t *testing.T) {
 	// off as a report of their work. The name still reaches the tab, but as the
 	// kind of program running there rather than as what it is doing.
 	pane := &state.PaneState{
-		CWD:          "/Users/dev/work/dashboard",
+		Dir:          "/Users/dev/work/dashboard",
 		Agent:        "acme-bot",
 		DisplayAgent: "Acme Bot",
 		AgentStatus:  herdr.AgentStatusWorking,
@@ -80,7 +80,7 @@ func TestAgentEchoingItsOwnNameIsNotAgentContext(t *testing.T) {
 		t.Error("the agent source claimed an agent naming itself")
 	}
 
-	got := Default(DefaultMaxLength).Resolve(tabWithPane(pane))
+	got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(tabWithPane(pane))
 	if want := "dashboard › acme-bot"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
@@ -92,8 +92,8 @@ func TestAgentEchoingItsOwnNameIsNotAgentContext(t *testing.T) {
 func TestAgentTitleWithoutAnAgentIsIgnored(t *testing.T) {
 	// Herdr leaves the title on a pane whose agent it no longer recognizes;
 	// without an agent it is not agent context.
-	got := Default(DefaultMaxLength).Resolve(tabWithPane(&state.PaneState{
-		CWD:        "/Users/dev/work/dashboard",
+	got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(tabWithPane(&state.PaneState{
+		Dir:        "/Users/dev/work/dashboard",
 		AgentTitle: "Implement OAuth scopes",
 	}))
 
@@ -109,7 +109,7 @@ func TestAgentSourceOnANilPane(t *testing.T) {
 }
 
 func TestAgentTitleWithNoDirectoryStandsAlone(t *testing.T) {
-	got := Default(DefaultMaxLength).Resolve(tabWithPane(&state.PaneState{
+	got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(tabWithPane(&state.PaneState{
 		Agent:       "claude",
 		AgentStatus: herdr.AgentStatusWorking,
 		AgentTitle:  "Implement OAuth scopes",
@@ -128,12 +128,12 @@ func TestContextAndActivityComeFromTheSamePane(t *testing.T) {
 		Panes: map[string]*state.PaneState{
 			"wE:p1": {
 				ID:            "wE:p1",
-				CWD:           "/Users/dev/work/api",
+				Dir:           "/Users/dev/work/api",
 				TerminalTitle: "Run migrations",
 			},
 			"wE:p2": {
 				ID:          "wE:p2",
-				CWD:         "/Users/dev/work/dashboard",
+				Dir:         "/Users/dev/work/dashboard",
 				Agent:       "claude",
 				AgentStatus: herdr.AgentStatusWorking,
 				AgentTitle:  "Implement OAuth scopes",
@@ -141,7 +141,7 @@ func TestContextAndActivityComeFromTheSamePane(t *testing.T) {
 		},
 	}
 
-	got := Default(DefaultMaxLength).Resolve(tab)
+	got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(tab)
 	if want := "dashboard › claude › Implement OAuth scopes"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}

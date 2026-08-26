@@ -21,9 +21,10 @@ separator can convey, and a second one would only ask the reader to learn a
 distinction they cannot see. So there is exactly one, `Separator`
 (`internal/resolver/sanitize.go`).
 
-Structurally a title is two fields, `Parts{Context, Activity}`
+Structurally a title is three fields, `Parts{Context, Branch, Activity}`
 (`internal/resolver/resolver.go`): *where* the user is and *what* they are
-doing.
+doing. The branch belongs to the first of those — it qualifies the directory
+rather than standing beside it as a separate kind of thing.
 
 ## One pane speaks for the tab
 
@@ -52,6 +53,7 @@ rather than by the order the sources happen to be listed in
 | 80 | Terminal title | `terminal.go` | Activity |
 | 70 | Foreground process | `process.go` | Activity |
 | 60 | SSH session | `ssh.go` | Context |
+| 40 | Git branch | `git.go` | Branch |
 | 30 | Working directory | `cwd.go` | Context |
 | 10 | Generic fallback | `resolver.go` | the whole name (`Shell`) |
 
@@ -130,33 +132,50 @@ opposite — with no host to bind to, the mark went into the activity slot — a
 that put it back in the contested half, where the remote shell's own title
 outranked it and a remote tab read exactly like a local one.
 
-### The git branch, and why it is gone
+### The git branch
 
-A source at confidence 40 read the branch checked out in the pane's directory
-and put it in the activity slot, so a tab read `dashboard › MC-13675`.
+The branch checked out in the pane's directory, read from the files under
+`.git` and never by running git: `git rev-parse` measured 12.37 ms against
+0.019 ms for reading `HEAD`, on a poll whose whole snapshot costs 0.47 ms. The
+reading is not cached — at 0.038 ms including the walk up to the repository, a
+fresh answer costs less than remembering a stale one, and a checkout shows up in
+the tab within one poll.
 
-It was removed. Sitting below the terminal title it only ever spoke for a plain
-shell in a repository, and in that spot the choice was between a tab called
-`dashboard` and one called `dashboard › <something from a branch name>`.
-Measured against a realistic corpus, that something was worth having only when
-the branch carried a tracker key:
+A branch says which slice of a project a tab is on, so it qualifies the
+**context**: `dashboard › feat/oauth › nvim › auth.ts`. Three rules keep it from
+saying anything it has not earned:
 
-```
-bugfix-asatretdinov-…-mc-13675  ->  MC-13675      identifies the work
-fix/filter-sentry-errors-…      ->  filter        a fragment, worse than nothing
-feature/add-dark-mode           ->  add-dark      a fragment
-hotfix-login-500                ->  LOGIN-500     reads as a ticket, is not one
-sprint-42-cleanup               ->  SPRINT-42     reads as a ticket, is not one
-develop                         ->  develop       says nothing, on every tab
-```
+- **The trunk contributes nothing.** Which branch that is comes from the
+  repository itself, `refs/remotes/origin/HEAD`, rather than from a list of
+  names: a team whose trunk is `develop` gets the same silence, and a branch
+  actually called `main` off a `develop` trunk still shows. A repository that
+  records no default shows its branch always.
+- **A name that fits is left whole.** `feat/oauth` keeps the namespace that
+  tells it from `fix/oauth`. Only a name too wide for `BranchMax` is reduced,
+  and then an issue key wins outright (`bugfix-asa-cpanel-uapi-mc-13675` →
+  `MC-13675`) because it identifies the work whatever convention wraps it;
+  failing that the namespace goes and the rest is cut at a whole word.
+- **A detached HEAD says so**, with the short hash — it is where commits get
+  lost, and silence there is indistinguishable from sitting on the trunk. A
+  rebase is the exception: it detaches HEAD but records the branch it set aside,
+  and that branch is still where the user is, so the tab keeps its name instead
+  of taking a new hash on every step.
 
-Every other source in the resolver declines when nothing useful survives. This
-one guessed instead, and the guesses were noise on tabs that would otherwise
-have been quietly correct. Keeping only the tracker-key rule was considered and
-turned down as well: it would have meant a source that fires for teams with one
-naming convention and never for anyone else.
+A worktree and a submodule are followed through the `gitdir:` file to their own
+HEAD, and to the shared refs their default branch lives in. Agents run in
+worktrees, and a worktree's directory is exactly the kind that names nothing.
 
-The whole thing lives in the git history if the trade ever looks different.
+**This source was here before, and was removed** (2d90d74). It sat at the same
+confidence but filled the *activity* slot, where the terminal title outranked it
+— so it spoke only for a plain shell in a repository, and there it guessed:
+`fix/filter-sentry-errors-…` became `filter`, and `develop` became a word every
+tab carried alike. Moving it into the context is what makes it visible beside an
+agent or an editor; reading the trunk from the repository is what retires the
+guess that produced the noise.
+
+It stays out of an ssh pane. The branch is read from the directory ssh was
+launched in, which says nothing about the machine on the other end, and a branch
+printed beside `prod-01` reads as that machine's.
 
 ### Working directory and the fallback
 
@@ -176,3 +195,6 @@ than `dashboard › nvim › auth.ts`.
 It is dropped only when something else remains — a tab reduced to nothing has
 lost more than it saved — and only on an exact match, so a tab whose directory
 has left its workspace behind is exactly the one that keeps saying where it is.
+A branch counts as something remaining, and the match is against the directory
+alone, so a tab in the workspace of the repository it is in reads `feat/oauth ›
+nvim`: the half that repeats goes, the half that distinguishes stays.

@@ -98,16 +98,17 @@ func splitAtWidth(s string, maxWidth int) (head, rest string) {
 }
 
 // Format assembles a title from its parts and sanitizes the result as a whole.
+// The order is the one a title reads in: from the general to the particular.
 func Format(parts Parts, maxLen int) string {
 	var b strings.Builder
-	if parts.Context != "" {
-		b.WriteString(parts.Context)
-	}
-	if parts.Activity != "" {
+	for _, part := range []string{parts.Context, parts.Branch, parts.Activity} {
+		if part == "" {
+			continue
+		}
 		if b.Len() > 0 {
 			b.WriteString(Separator)
 		}
-		b.WriteString(parts.Activity)
+		b.WriteString(part)
 	}
 	return Sanitize(b.String(), maxLen)
 }

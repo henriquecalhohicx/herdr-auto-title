@@ -46,7 +46,7 @@ func run() error {
 		return err
 	}
 
-	titles := resolver.Default(cfg.MaxLength)
+	titles := resolver.Default(cfg.MaxLength, cfg.BranchMax)
 
 	app.New(cfg, log, titles).Run(ctx, client)
 	return nil
