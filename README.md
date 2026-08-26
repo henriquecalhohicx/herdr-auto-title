@@ -50,22 +50,26 @@ will run.
 ## What your tabs will be called
 
 ```
-~/work/dashboard                       →  dashboard
-~/work/dashboard on feature/MC-13200   →  dashboard › MC-13200
-nvim editing auth.provider.ts          →  nvim › auth.provider.ts
-an agent working on OAuth scopes       →  dashboard › claude › Implement OAuth scopes
-ssh into prod-01                       →  ssh › prod-01
-$HOME                                  →  Shell
+~/work/dashboard                       →  1 · dashboard
+~/work/dashboard on feature/MC-13200   →  2 · dashboard › MC-13200
+nvim editing auth.provider.ts          →  3 · nvim › auth.provider.ts
+an agent working on OAuth scopes       →  4 · dashboard › claude › Implement OAuth scopes
+ssh into prod-01                       →  5 · ssh › prod-01
+$HOME                                  →  6 · Shell
 ```
 
-Titles read `<context> › <activity>`, capped at 64 columns of the tab bar. The
-activity is the first of these that has something to say: what an agent reports
-it is working on, then the terminal title, then a lone program in the pane. The
-context is the directory you are in, or the machine you reached over `ssh`, and
-the branch you have checked out qualifies it.
+Titles read `<position> · <context> › <activity>`, capped at 64 columns of the
+tab bar. The activity is the first of these that has something to say: what an
+agent reports it is working on, then the terminal title, then a lone program in
+the pane. The context is the directory you are in, or the machine you reached
+over `ssh`, and the branch you have checked out qualifies it.
 
-Four rules explain most surprises:
+These rules explain most surprises:
 
+- **The number in front is the tab's place in the workspace**, which is the key
+  that switches to it. It leads the title because the tab bar cuts the tail of
+  a title too wide for it, and it moves with the tab when one to its left
+  closes. `HERDR_AUTO_TITLE_POSITION=false` leaves it out.
 - Auto Title never repeats your workspace name, because Herdr already shows it
   above the tabs.
 - **A branch shows when it distinguishes.** Your repository's own default

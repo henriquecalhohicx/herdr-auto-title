@@ -12,7 +12,7 @@ import (
 // sets and the environment the tests run in cannot change the outcome.
 func isolate(t *testing.T) {
 	t.Helper()
-	for _, name := range []string{EnvDebug, EnvPoll, EnvMaxLength, EnvBranchMax, EnvManual} {
+	for _, name := range []string{EnvDebug, EnvPoll, EnvMaxLength, EnvBranchMax, EnvPosition, EnvManual} {
 		t.Setenv(name, "")
 	}
 }
@@ -35,6 +35,22 @@ func TestLoadConfigDefaults(t *testing.T) {
 	}
 	if cfg.BranchMax != resolver.DefaultBranchMaxLength {
 		t.Errorf("branch max = %d, want %d", cfg.BranchMax, resolver.DefaultBranchMaxLength)
+	}
+	if !cfg.ShowPosition {
+		t.Error("positions are off by default")
+	}
+}
+
+func TestLoadConfigTurnsPositionsOff(t *testing.T) {
+	isolate(t)
+	t.Setenv(EnvPosition, "false")
+
+	cfg, warnings := LoadConfig()
+	if len(warnings) != 0 {
+		t.Errorf("warnings = %v, want none", warnings)
+	}
+	if cfg.ShowPosition {
+		t.Error("positions are on despite being disabled")
 	}
 }
 
