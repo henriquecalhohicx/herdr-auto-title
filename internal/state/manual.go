@@ -5,6 +5,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 )
 
@@ -43,11 +44,14 @@ func LoadManual(path string) *Manual {
 	if err != nil {
 		return m
 	}
+
 	var stored manualFile
 	if json.Unmarshal(raw, &stored) != nil {
 		return m
 	}
+
 	maps.Copy(m.locked, stored.Locked)
+
 	return m
 }
 
@@ -57,6 +61,7 @@ func DefaultManualPath() string {
 	if err != nil {
 		return ""
 	}
+
 	return filepath.Join(dir, "herdr-auto-title", "manual-names.json")
 }
 
@@ -64,7 +69,9 @@ func DefaultManualPath() string {
 func (m *Manual) Locked(tabID string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	_, locked := m.locked[tabID]
+
 	return locked
 }
 
@@ -75,6 +82,18 @@ type Sighting struct {
 	Current string
 	Desired string
 	Default string
+}
+
+// SightingFrom is what a poll saw of a tab, given the name the resolver chose
+// for it. What Herdr calls an unclaimed tab is derived here rather than by the
+// caller: it is the tab's own position, which is this package's to know.
+func SightingFrom(tab TabState, desired string) Sighting {
+	return Sighting{
+		TabID:   tab.ID,
+		Current: tab.CurrentName,
+		Desired: desired,
+		Default: strconv.Itoa(tab.Position),
+	}
 }
 
 // Observe records what a poll saw and reports whether the user put that label
@@ -105,6 +124,7 @@ func (m *Manual) Observe(s Sighting) bool {
 
 	m.locked[s.TabID] = s.Current
 	m.saveLocked()
+
 	return true
 }
 
@@ -113,6 +133,7 @@ func (m *Manual) Observe(s Sighting) bool {
 func (m *Manual) Settled() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.settled = true
 }
 
@@ -121,6 +142,7 @@ func (m *Manual) Settled() {
 func (m *Manual) Applied(tabID, label string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.seen[tabID] = label
 }
 
@@ -132,17 +154,21 @@ func (m *Manual) Retain(live map[string]string) {
 	defer m.mu.Unlock()
 
 	changed := false
+
 	for tabID, label := range m.locked {
 		if current, alive := live[tabID]; !alive || current != label {
 			delete(m.locked, tabID)
+
 			changed = true
 		}
 	}
+
 	for tabID := range m.seen {
 		if _, alive := live[tabID]; !alive {
 			delete(m.seen, tabID)
 		}
 	}
+
 	if changed {
 		m.saveLocked()
 	}
@@ -154,6 +180,7 @@ func (m *Manual) saveLocked() {
 	if m.path == "" {
 		return
 	}
+
 	if os.MkdirAll(filepath.Dir(m.path), 0o755) != nil {
 		return
 	}
@@ -163,10 +190,12 @@ func (m *Manual) saveLocked() {
 	if err != nil {
 		return
 	}
+
 	tmp := m.path + ".tmp"
 	if os.WriteFile(tmp, raw, 0o644) != nil {
 		return
 	}
+
 	if os.Rename(tmp, m.path) != nil {
 		_ = os.Remove(tmp)
 	}

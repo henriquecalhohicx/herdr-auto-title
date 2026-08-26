@@ -10,9 +10,9 @@ import (
 	"sync/atomic"
 )
 
-// SocketPathEnv names the environment variable holding the path to the Herdr
+// socketPathEnv names the environment variable holding the path to the Herdr
 // socket. The path is never hard-coded.
-const SocketPathEnv = "HERDR_SOCKET_PATH"
+const socketPathEnv = "HERDR_SOCKET_PATH"
 
 // Client is the subset of the Herdr socket API that Auto Title uses.
 type Client interface {
@@ -31,27 +31,29 @@ type SocketClient struct {
 
 var _ Client = (*SocketClient)(nil)
 
-// SocketPath returns the configured Herdr socket path.
-func SocketPath() (string, error) {
-	path := os.Getenv(SocketPathEnv)
+// socketPath returns the configured Herdr socket path.
+func socketPath() (string, error) {
+	path := os.Getenv(socketPathEnv)
 	if path == "" {
-		return "", fmt.Errorf("%s is not set: Auto Title must be started by Herdr", SocketPathEnv)
+		return "", fmt.Errorf("%s is not set: Auto Title must be started by Herdr", socketPathEnv)
 	}
+
 	return path, nil
 }
 
 // New builds a client for the socket named by HERDR_SOCKET_PATH. It performs no
 // I/O; the first connection is made by the first call.
 func New() (*SocketClient, error) {
-	path, err := SocketPath()
+	path, err := socketPath()
 	if err != nil {
 		return nil, err
 	}
-	return NewWithPath(path), nil
+
+	return newWithPath(path), nil
 }
 
-// NewWithPath builds a client for an explicit socket path.
-func NewWithPath(path string) *SocketClient {
+// newWithPath builds a client for an explicit socket path.
+func newWithPath(path string) *SocketClient {
 	return &SocketClient{path: path}
 }
 
@@ -63,6 +65,7 @@ func (c *SocketClient) Call(ctx context.Context, method string, params any, resu
 	}
 
 	var d net.Dialer
+
 	conn, err := d.DialContext(ctx, "unix", c.path)
 	if err != nil {
 		return fmt.Errorf("connect to herdr socket %s: %w", c.path, err)
@@ -91,14 +94,17 @@ func (c *SocketClient) Call(ctx context.Context, method string, params any, resu
 	if err := json.Unmarshal(line, &f); err != nil {
 		return fmt.Errorf("decode %s response: %w", method, err)
 	}
+
 	if f.Error != nil {
 		return fmt.Errorf("%s: %w", method, f.Error)
 	}
+
 	if result != nil && len(f.Result) > 0 {
 		if err := json.Unmarshal(f.Result, result); err != nil {
 			return fmt.Errorf("decode %s result: %w", method, err)
 		}
 	}
+
 	return nil
 }
 
@@ -108,6 +114,7 @@ func withContextErr(ctx context.Context, err error) error {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return ctxErr
 	}
+
 	return err
 }
 
@@ -119,6 +126,7 @@ func SessionSnapshot(ctx context.Context, c Client) (Snapshot, error) {
 	if err := c.Call(ctx, MethodSessionSnapshot, emptyParams{}, &res); err != nil {
 		return Snapshot{}, err
 	}
+
 	return res.Snapshot, nil
 }
 
@@ -129,6 +137,7 @@ func PaneProcesses(ctx context.Context, c Client, paneID string) ([]PaneProcessI
 	if err := c.Call(ctx, MethodPaneProcessInfo, PaneTarget{PaneID: paneID}, &res); err != nil {
 		return nil, err
 	}
+
 	return res.ProcessInfo.ForegroundProcesses, nil
 }
 

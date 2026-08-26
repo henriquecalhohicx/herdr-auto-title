@@ -19,9 +19,11 @@ func TestAgentTitleBeatsEverySourceBelowIt(t *testing.T) {
 	if want := "dashboard › claude › Implement OAuth scopes"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
+
 	if got.Reason != "agent" {
 		t.Errorf("reason = %q, want agent", got.Reason)
 	}
+
 	if got.Confidence != ConfidenceAgent {
 		t.Errorf("confidence = %d, want %d", got.Confidence, ConfidenceAgent)
 	}
@@ -46,7 +48,10 @@ func TestGenericAgentNameFallsThrough(t *testing.T) {
 	// topic then arrives through the terminal title instead.
 	for _, title := range []string{"Claude", "Claude Code", "Agent", "Coding Agent", ""} {
 		t.Run(title, func(t *testing.T) {
-			got := Default(DefaultMaxLength, DefaultBranchMaxLength).Resolve(tabWithPane(&state.PaneState{
+			got := Default(
+				DefaultMaxLength,
+				DefaultBranchMaxLength,
+			).Resolve(tabWithPane(&state.PaneState{
 				Dir:           "/Users/dev/work/dashboard",
 				TerminalTitle: "Fix OAuth redirect",
 				Agent:         "claude",
@@ -57,6 +62,7 @@ func TestGenericAgentNameFallsThrough(t *testing.T) {
 			if want := "dashboard › claude › Fix OAuth redirect"; got.Name != want {
 				t.Errorf("name = %q, want %q", got.Name, want)
 			}
+
 			if got.Reason != "terminal_title" {
 				t.Errorf("reason = %q, want terminal_title", got.Reason)
 			}
@@ -84,6 +90,7 @@ func TestAgentEchoingItsOwnNameIsNotAgentContext(t *testing.T) {
 	if want := "dashboard › acme-bot"; got.Name != want {
 		t.Errorf("name = %q, want %q", got.Name, want)
 	}
+
 	if got.Reason != "process" {
 		t.Errorf("reason = %q, want process", got.Reason)
 	}
@@ -125,13 +132,13 @@ func TestContextAndActivityComeFromTheSamePane(t *testing.T) {
 	// leak into the name and describe neither of them.
 	tab := state.TabState{
 		ID: "wE:t1",
-		Panes: map[string]*state.PaneState{
-			"wE:p1": {
+		Panes: []*state.PaneState{
+			{
 				ID:            "wE:p1",
 				Dir:           "/Users/dev/work/api",
 				TerminalTitle: "Run migrations",
 			},
-			"wE:p2": {
+			{
 				ID:          "wE:p2",
 				Dir:         "/Users/dev/work/dashboard",
 				Agent:       "claude",

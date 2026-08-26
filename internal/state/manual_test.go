@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/kryptamine/herdr-auto-title/internal/herdr"
 )
 
 func newManual(t *testing.T) *Manual {
@@ -11,6 +13,7 @@ func newManual(t *testing.T) *Manual {
 	m := LoadManual(filepath.Join(t.TempDir(), "manual-names.json"))
 	// Most tests are about a session already under way.
 	m.Settled()
+
 	return m
 }
 
@@ -18,6 +21,24 @@ func newManual(t *testing.T) *Manual {
 // resolver would name `dashboard`.
 func sighting(current string) Sighting {
 	return Sighting{TabID: "wE:t1", Current: current, Desired: "dashboard", Default: "1"}
+}
+
+func TestSightingFromDerivesTheDefaultLabel(t *testing.T) {
+	// A tab nobody has named wears its position, so the third tab of a
+	// workspace is `3` however high the ids around it have climbed.
+	tab := TabFrom(herdr.TabInfo{TabID: "wE:t9", Label: "Important work"}, "work", 3, nil)
+
+	got := SightingFrom(tab, "dashboard")
+	want := Sighting{
+		TabID:   "wE:t9",
+		Current: "Important work",
+		Desired: "dashboard",
+		Default: "3",
+	}
+
+	if got != want {
+		t.Errorf("sighting = %+v, want %+v", got, want)
+	}
 }
 
 func TestTheFirstPollNeverLocks(t *testing.T) {
@@ -43,9 +64,12 @@ func TestATabTurningUpAlreadyNamedIsTheUsers(t *testing.T) {
 	// the name it carries is not Auto Title's.
 	m := newManual(t)
 
-	if !m.Observe(Sighting{TabID: "wE:t9", Current: "My thing", Desired: "dashboard", Default: "9"}) {
+	if !m.Observe(
+		Sighting{TabID: "wE:t9", Current: "My thing", Desired: "dashboard", Default: "9"},
+	) {
 		t.Fatal("a tab that appeared already named was not read as the user's")
 	}
+
 	if !m.Locked("wE:t9") {
 		t.Error("the tab is not locked")
 	}
@@ -71,6 +95,7 @@ func TestATabFallingBackToItsDefaultLabelIsNotTheUsers(t *testing.T) {
 	if m.Observe(sighting("1")) {
 		t.Fatal("a tab back on its default label was read as the user's")
 	}
+
 	if m.Locked("wE:t1") {
 		t.Error("the tab is locked")
 	}
@@ -84,6 +109,7 @@ func TestARenameByTheUserLocksTheTab(t *testing.T) {
 	if !m.Observe(sighting("Important work")) {
 		t.Fatal("a label the plugin neither set nor wanted was not read as the user's")
 	}
+
 	if !m.Locked("wE:t1") {
 		t.Error("the tab is not locked")
 	}
@@ -124,6 +150,7 @@ func TestLocksSurviveAReload(t *testing.T) {
 
 	m := LoadManual(path)
 	m.Observe(sighting("1"))
+
 	if !m.Observe(sighting("Important work")) {
 		t.Fatal("the tab was not locked")
 	}
@@ -145,9 +172,11 @@ func TestAReloadedLockIsReleasedWhenTheLabelMovedOn(t *testing.T) {
 
 	reloaded := LoadManual(path)
 	reloaded.Retain(map[string]string{"wE:t1": "2"})
+
 	if reloaded.Locked("wE:t1") {
 		t.Error("a lock was kept for a tab that no longer carries its name")
 	}
+
 	if LoadManual(path).Locked("wE:t1") {
 		t.Error("the released lock was not written out")
 	}
@@ -159,6 +188,7 @@ func TestRetainDropsTabsTheSessionNoLongerHolds(t *testing.T) {
 	m.Observe(sighting("Important work"))
 
 	m.Retain(map[string]string{})
+
 	if m.Locked("wE:t1") {
 		t.Error("a closed tab is still locked")
 	}
@@ -172,6 +202,7 @@ func TestRetainDropsTabsTheSessionNoLongerHolds(t *testing.T) {
 
 func TestAnUnreadableStoreIsNotFatal(t *testing.T) {
 	dir := t.TempDir()
+
 	path := filepath.Join(dir, "manual-names.json")
 	if err := os.WriteFile(path, []byte("{not json"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
@@ -183,6 +214,7 @@ func TestAnUnreadableStoreIsNotFatal(t *testing.T) {
 	}
 	// And it still works from there.
 	m.Observe(sighting("1"))
+
 	if !m.Observe(sighting("Important work")) {
 		t.Error("locking stopped working after a corrupt store")
 	}
@@ -195,6 +227,7 @@ func TestWithoutAPathLocksStayInMemory(t *testing.T) {
 	if !m.Observe(sighting("Important work")) {
 		t.Error("locking needs a file")
 	}
+
 	if !m.Locked("wE:t1") {
 		t.Error("the lock was not kept")
 	}

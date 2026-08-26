@@ -84,8 +84,9 @@ func LoadConfig() (Config, []string) {
 	cfg.ShowPosition = fromEnv(&warnings, EnvPosition, cfg.ShowPosition, boolean)
 	cfg.ReadTranscripts = fromEnv(&warnings, EnvTranscript, cfg.ReadTranscripts, boolean)
 	// A path needs neither parsing nor checking, so it does not go through
-	// fromEnv: any string the user set is the path they meant.
-	if raw := os.Getenv(EnvManual); raw != "" {
+	// fromEnv: any string the user set is the path they meant, and setting it
+	// to none of it asks for locks that do not outlive the process.
+	if raw, set := os.LookupEnv(EnvManual); set {
 		cfg.ManualPath = raw
 	}
 
@@ -117,6 +118,7 @@ func configPath() string {
 	if err != nil {
 		return ""
 	}
+
 	return filepath.Join(dir, "herdr-auto-title", ConfigFile)
 }
 
@@ -128,11 +130,13 @@ func fromEnv[T any](warnings *[]string, name string, fallback T, convert convert
 	if raw == "" {
 		return fallback
 	}
+
 	value, err := convert(raw)
 	if err != nil {
 		*warnings = append(*warnings, fmt.Sprintf("%s=%q %s, using %v", name, raw, err, fallback))
 		return fallback
 	}
+
 	return value
 }
 
@@ -154,6 +158,7 @@ func boolean(raw string) (bool, error) {
 	if err != nil {
 		return false, errNotBoolean
 	}
+
 	return value, nil
 }
 
@@ -164,9 +169,11 @@ func count(raw string) (int, error) {
 	if err != nil {
 		return 0, errNotNumber
 	}
+
 	if value <= 0 {
 		return 0, errNotPositive
 	}
+
 	return value, nil
 }
 
@@ -177,9 +184,11 @@ func countOrNone(raw string) (int, error) {
 	if err != nil {
 		return 0, errNotNumber
 	}
+
 	if value < 0 {
 		return 0, errNegative
 	}
+
 	return value, nil
 }
 
@@ -190,5 +199,6 @@ func milliseconds(raw string) (time.Duration, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	return time.Duration(value) * time.Millisecond, nil
 }

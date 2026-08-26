@@ -11,13 +11,14 @@ import (
 
 // numberedCWD names a tab after its directory and puts its position in front.
 func numberedCWD(maxLength int) *Numbered {
-	return NewNumbered(New(maxLength, NewCWD()))
+	return NewNumbered(New(maxLength, NewCWD()), maxLength)
 }
 
 // atPosition builds a one-pane tab sitting at a position in its workspace.
 func atPosition(position int, dir string) state.TabState {
 	tab := tabWithCWD(dir)
 	tab.Position = position
+
 	return tab
 }
 
@@ -49,6 +50,7 @@ func TestPositionKeepsTheDecisionItWraps(t *testing.T) {
 	if got.Reason != "cwd" {
 		t.Errorf("reason = %q, want cwd", got.Reason)
 	}
+
 	if got.Confidence != ConfidenceCWD {
 		t.Errorf("confidence = %d, want %d", got.Confidence, ConfidenceCWD)
 	}
@@ -56,12 +58,14 @@ func TestPositionKeepsTheDecisionItWraps(t *testing.T) {
 
 func TestAPositionIsCountedAgainstTheWidth(t *testing.T) {
 	const maxLength = 16
+
 	long := "/Users/dev/work/" + strings.Repeat("a", 40)
 
 	got := numberedCWD(maxLength).Resolve(atPosition(7, long))
 	if width := uniseg.StringWidth(got.Name); width > maxLength {
 		t.Errorf("name %q is %d columns wide, want at most %d", got.Name, width, maxLength)
 	}
+
 	if !strings.HasPrefix(got.Name, "7 · ") {
 		t.Errorf("name = %q, want it to lead with its position", got.Name)
 	}
@@ -73,5 +77,43 @@ func TestAPositionWithNoRoomIsDropped(t *testing.T) {
 	got := numberedCWD(3).Resolve(atPosition(10, "/Users/dev/work/dashboard"))
 	if got.Name != "das" {
 		t.Errorf("name = %q, want the bare title", got.Name)
+	}
+}
+
+func TestNumberedWithoutAWidthTakesTheDefault(t *testing.T) {
+	// Zero means "no bound" to Sanitize but would leave no room at all here,
+	// so every tab would quietly lose the position instead.
+	got := NewNumbered(New(0, NewCWD()), 0).Resolve(atPosition(2, "/Users/dev/work/api"))
+	if got.Name != "2 · api" {
+		t.Errorf("name = %q, want the position kept", got.Name)
+	}
+}
+
+// fixedResolver names every tab the same, which is all Numbered needs of what
+// it wraps.
+type fixedResolver struct {
+	decision Decision
+}
+
+func (f fixedResolver) Resolve(state.TabState) Decision { return f.decision }
+
+func TestAnyResolverCanBeNumbered(t *testing.T) {
+	// Numbered asks what it wraps for a name and nothing else, so a resolver
+	// that is not the shipped chain is numbered just the same.
+	inner := fixedResolver{decision: Decision{
+		Name:       "release notes",
+		Confidence: ConfidenceAgent,
+		Reason:     "test_source",
+	}}
+
+	got := NewNumbered(inner, DefaultMaxLength).Resolve(atPosition(4, "/Users/dev/work/api"))
+	want := Decision{
+		Name:       "4 · release notes",
+		Confidence: ConfidenceAgent,
+		Reason:     "test_source",
+	}
+
+	if got != want {
+		t.Errorf("decision = %+v, want %+v", got, want)
 	}
 }

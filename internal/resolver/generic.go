@@ -5,17 +5,12 @@ import (
 	"strings"
 )
 
-// genericValues name a program, a shell or a place rather than what the user is
-// doing there, so a source that finds one declines. Keys are lower-cased;
-// lookups normalize before matching.
+// genericValues name a program or a place rather than what the user is doing
+// there, so a source that finds one declines. Shells are not repeated here:
+// shellNames holds them, and two lists would disagree. Keys are lower-cased.
 var genericValues = map[string]struct{}{
-	// Shells.
-	"bash":  {},
-	"zsh":   {},
-	"sh":    {},
-	"fish":  {},
-	"shell": {},
 	// Terminals and runtimes.
+	"shell":    {},
 	"terminal": {},
 	"node":     {},
 	// Agents naming themselves instead of their work.
@@ -23,6 +18,18 @@ var genericValues = map[string]struct{}{
 	"claude code":  {},
 	"agent":        {},
 	"coding agent": {},
+}
+
+// isGeneric reports whether a lower-cased value names something rather than
+// says what is being done with it.
+func isGeneric(lowered string) bool {
+	if _, generic := genericValues[lowered]; generic {
+		return true
+	}
+
+	_, shell := shellNames[lowered]
+
+	return shell
 }
 
 // uriPattern matches a scheme-qualified location such as oil:///home/dev.
@@ -45,12 +52,15 @@ func Meaningful(value string) (string, bool) {
 	if cleaned == "" {
 		return "", false
 	}
-	if _, generic := genericValues[strings.ToLower(cleaned)]; generic {
+
+	if isGeneric(strings.ToLower(cleaned)) {
 		return "", false
 	}
+
 	if promptPattern.MatchString(cleaned) {
 		return "", false
 	}
+
 	return cleaned, true
 }
 
@@ -59,13 +69,16 @@ func Meaningful(value string) (string, bool) {
 // survive: `Fix bug in src/auth.ts` describes work rather than a place.
 func stripLocations(value string) string {
 	words := strings.Fields(value)
+
 	kept := make([]string, 0, len(words))
 	for _, word := range words {
 		if isLocation(strings.Trim(word, punctuation)) {
 			continue
 		}
+
 		kept = append(kept, word)
 	}
+
 	return tidy(kept)
 }
 
@@ -94,11 +107,14 @@ func tidy(words []string) string {
 		if len(kept) == 0 || isPunctuationOnly(kept[len(kept)-1]) {
 			continue
 		}
+
 		kept = append(kept, word)
 	}
+
 	for len(kept) > 0 && isPunctuationOnly(kept[len(kept)-1]) {
 		kept = kept[:len(kept)-1]
 	}
+
 	return strings.Join(kept, " ")
 }
 

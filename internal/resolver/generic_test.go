@@ -12,10 +12,21 @@ func TestMeaningful(t *testing.T) {
 		{"work described in words", "Fix OAuth redirect", "Fix OAuth redirect", true},
 		{"file name", "auth.ts", "auth.ts", true},
 		{"host name", "prod-01", "prod-01", true},
-		{"relative path inside a sentence", "Fix bug in src/auth.ts", "Fix bug in src/auth.ts", true},
+		{
+			"relative path inside a sentence",
+			"Fix bug in src/auth.ts",
+			"Fix bug in src/auth.ts",
+			true,
+		},
 
 		{"shell name", "zsh", "", false},
 		{"shell name in another case", "ZSH", "", false},
+		// One list of shells, so what paneKind skips as a process is what
+		// Meaningful refuses as a title. These four used to get through.
+		{"a shell only the process table knew", "dash", "", false},
+		{"korn shell", "ksh", "", false},
+		{"c shell", "csh", "", false},
+		{"the login shell", "login", "", false},
 		{"multi-word program name", "Claude Code", "", false},
 		{"runtime name", "node", "", false},
 		{"surrounded by whitespace", "  bash  ", "", false},
@@ -52,6 +63,7 @@ func TestMeaningful(t *testing.T) {
 			if ok != tc.ok {
 				t.Fatalf("Meaningful(%q) ok = %v, want %v", tc.value, ok, tc.ok)
 			}
+
 			if got != tc.want {
 				t.Errorf("Meaningful(%q) = %q, want %q", tc.value, got, tc.want)
 			}
