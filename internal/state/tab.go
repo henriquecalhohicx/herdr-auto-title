@@ -4,7 +4,6 @@ package state
 
 import (
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -109,11 +108,12 @@ type TabState struct {
 	CurrentName string
 	// WorkspaceName is the label Herdr shows above this tab.
 	WorkspaceName string
-	// DefaultName is the label Herdr gives an unnamed tab: its place in the
-	// workspace, counted from one. Not TabInfo.number, which is a counter that
-	// never repeats — see docs/architecture/herdr-socket-api.md.
-	DefaultName string
-	Panes       map[string]*PaneState
+	// Position is the tab's place in its workspace, counted from one, which is
+	// both the key that switches to it and the label Herdr gives it while it
+	// is unnamed. Not TabInfo.number, which is a counter that never repeats —
+	// see docs/architecture/herdr-socket-api.md.
+	Position int
+	Panes    map[string]*PaneState
 }
 
 // TabFrom builds tab state from what a read returned. Position is the tab's
@@ -123,7 +123,7 @@ func TabFrom(info herdr.TabInfo, workspaceName string, position int, panes []*Pa
 		ID:            info.TabID,
 		CurrentName:   info.Label,
 		WorkspaceName: workspaceName,
-		DefaultName:   strconv.Itoa(position),
+		Position:      position,
 		Panes:         make(map[string]*PaneState, len(panes)),
 	}
 	for _, pane := range panes {

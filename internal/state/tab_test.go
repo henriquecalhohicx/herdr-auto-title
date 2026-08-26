@@ -54,8 +54,8 @@ func TestTabFromKeepsItsLabel(t *testing.T) {
 	if tab.WorkspaceName != "dashboard" {
 		t.Errorf("workspace name = %q, want dashboard", tab.WorkspaceName)
 	}
-	if tab.DefaultName != "1" {
-		t.Errorf("default name = %q, want the tab's position 1", tab.DefaultName)
+	if tab.Position != 1 {
+		t.Errorf("position = %d, want the tab's place in its workspace 1", tab.Position)
 	}
 	if pane := tab.Panes["wE:p1"]; pane == nil || pane.Dir != "/work/dashboard" {
 		t.Errorf("pane wE:p1 = %+v, want dir /work/dashboard", pane)
