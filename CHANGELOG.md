@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3](https://github.com/kryptamine/herdr-auto-title/compare/v0.3.2...v0.3.3) (2026-08-30)
+
+
+### Bug Fixes
+
+* **herdr:** name a pane after the directory in front of it ([743bb2f](https://github.com/kryptamine/herdr-auto-title/commit/743bb2f9c8b7e70cdeb0cbb998ed343acb77690a))
+
 ## [0.3.2](https://github.com/kryptamine/herdr-auto-title/compare/v0.3.1...v0.3.2) (2026-08-28)
 
 
