@@ -5,14 +5,28 @@ name = "Auto Title"
 version = "0.3.2"
 min_herdr_version = "0.8.2"
 description = "Automatically generates contextual tab titles"
-# Windows is not claimed: nothing has ever run there, and the test fixtures
-# that assume Unix paths say the code has not been thought about on it either.
-platforms = ["linux", "macos"]
+platforms = ["linux", "macos", "windows"]
 
 # Built at install time; Go is the only requirement.
 [[build]]
 command = ["go", "build", "-o", "herdr-auto-title", "./cmd/herdr-auto-title"]
+platforms = ["linux", "macos"]
+
+[[build]]
+command = ["go", "build", "-o", "herdr-auto-title.exe", "./cmd/herdr-auto-title"]
+platforms = ["windows"]
 
 # A one-shot launch, not a supervised daemon: the process stays alive itself.
 [[startup]]
 command = ["./herdr-auto-title"]
+platforms = ["linux", "macos"]
+
+# herdr runs commands with an extended-length \\?\C:\.. cwd; CreateProcessW
+# can't resolve a relative .\herdr-auto-title.exe against it, so this
+# resolves HERDR_PLUGIN_ROOT and invokes the built exe by absolute path.
+[[startup]]
+command = [
+  "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+  "$r=$env:HERDR_PLUGIN_ROOT; if($r.StartsWith('\\\\?\\')){$r=$r.Substring(4)}; & (Join-Path $r 'herdr-auto-title.exe')"
+]
+platforms = ["windows"]
