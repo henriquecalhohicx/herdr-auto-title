@@ -45,7 +45,7 @@ func newTestServer(t *testing.T, reply func(incoming) string) *testServer {
 
 	path := filepath.Join(dir, "h.sock")
 
-	ln, err := net.Listen("unix", path)
+	ln, err := listen(path)
 	if err != nil {
 		t.Fatalf("listen on %s: %v", path, err)
 	}
