@@ -103,6 +103,112 @@ stays out of the plugin's: the main module keeps two dependencies and still
 builds on Go 1.24, which is what Herdr needs at install time. `errcheck` is off
 — the places that swallow an error say why they do.
 
+## Windows port
+
+This fork (`henriquecalhohicx/herdr-auto-title`, branch `windows-port`) adds
+Windows to `platforms`. `origin` is this fork and the only push target;
+`upstream` (`kryptamine/herdr-auto-title`) is read-only reference — fetch is
+fine, never push or merge from it without a specific reason.
+
+- **Transport.** `internal/herdr/client.go`'s `Call` used to dial `"unix"`
+  directly. That dial is now `dial(ctx, path)`, split by build tag:
+  `client_unix.go` (`!windows`) keeps the original `net.Dialer.DialContext`
+  call unchanged; `client_windows.go` (`windows`) dials the named pipe
+  `\\.\pipe\` + `HERDR_SOCKET_PATH` via `github.com/Microsoft/go-winio`'s
+  `DialPipeContext`, mirroring `herdr-cache-ttl`'s `pipe_name_str`. The prefix
+  check (`pipeName` in `client_windows.go`) leaves an already-prefixed
+  `\\.\pipe\` or `\\?\pipe\` path untouched.
+- **Tests.** `client_test.go`'s fake Herdr server used to listen on `"unix"`
+  directly; it now goes through a `listen(path)` split the same way
+  (`listener_unix_test.go`, `listener_windows_test.go`, the latter via
+  `winio.ListenPipe`), so the existing table of `internal/herdr` tests
+  exercises a real named-pipe listen+dial round trip on Windows instead of
+  silently falling back to a Unix socket. `pipeName` itself has two direct
+  unit tests in `client_windows_test.go`.
+- **Manifest.** `herdr-plugin.toml` gained a Windows `[[build]]`
+  (`go build -o herdr-auto-title.exe ./cmd/herdr-auto-title`) and a Windows
+  `[[startup]]`. The startup entry is wrapped in `powershell -NoProfile
+  -ExecutionPolicy Bypass -Command`, resolving `HERDR_PLUGIN_ROOT` (stripping
+  a leading `\\?\`) and invoking the built `.exe` by absolute path — the same
+  problem and fix as `herdr-cache-ttl`'s launcher: herdr runs commands with an
+  extended-length `\\?\C:\..` cwd, and `CreateProcessW` cannot resolve a
+  relative `./herdr-auto-title.exe` against it.
+- **Dependency.** `go.mod` gained `github.com/Microsoft/go-winio` (direct) and
+  `golang.org/x/sys` (indirect, go-winio's own dependency). Both are pulled in
+  regardless of build target since Go module resolution is not
+  platform-conditional, but neither package is imported outside
+  `client_windows.go`/`client_windows_test.go`, so nothing changes for a
+  linux/macos build.
+
+**Verified on this host (Windows 11, go1.27.0):**
+- `go build ./...` and `go vet ./...` are clean.
+- `go build -o herdr-auto-title.exe ./cmd/herdr-auto-title` succeeds and
+  produces a working executable.
+- `go test ./internal/herdr/...` passes in full, including a real
+  `winio.ListenPipe` + `winio.DialPipeContext` round trip inside the test
+  process — this is the closest this pass got to proving the named-pipe
+  transport actually moves bytes.
+
+**Known limitations — not verified:**
+- **No live Herdr round trip.** Nothing here has dialed a real running
+  `herdr.exe`'s actual named pipe; the in-process test server is not Herdr,
+  and no live smoke test (`herdr plugin action invoke`, a real
+  `HERDR_SOCKET_PATH` from a running `herdr server`) was run, unlike
+  `herdr-cache-ttl`'s windows-port pass. Treat the transport as
+  "compiles and unit-tests clean," not "confirmed against Herdr."
+- **The `[[build]]`/`[[startup]]` manifest entries have never been triggered
+  by herdr's own install/build machinery.** They were written to mirror
+  `herdr-cache-ttl`'s convention exactly, but only read, never exercised via
+  `herdr plugin install`/`herdr plugin link` — that step is explicitly left
+  for later, along with any change to `plugins.json`.
+- **`go test -race` was not run.** It requires cgo, which needs a C compiler;
+  none is installed on this host (checked: no `gcc`/`clang`/`cc` on `PATH`).
+  Plain `go test` was used instead. `make check` (the repo's own gate) will
+  still fail here on `lint`/`fmt` for the same reason if `golangci-lint`
+  itself needs cgo, and separately because `tools/go.mod` pins Go 1.26 while
+  this host's toolchain is 1.27 — neither was investigated further, since
+  fixing the lint toolchain is outside this change's scope.
+- **`internal/app` and `internal/resolver` fail broadly under `go test ./...`
+  on this Windows host — pre-existing, not caused by this change.** Two
+  separate causes, both Unix-only assumptions in test code that this pass did
+  not touch:
+  - Most fixtures pass Unix-style absolute paths (e.g.
+    `/Users/dev/Work/dashboard`) as a pane's `cwd`. `filepath.IsAbs` requires
+    a volume/drive on Windows, so `internal/resolver/cwd.go`'s `CWD.base`
+    treats every such fixture as a relative path and falls through to
+    `generic_fallback` instead of resolving `cwd` — this cascades into most
+    of `internal/resolver`'s and `internal/app`'s table tests.
+  - `internal/app/config_test.go`'s `isolate` helper sets `$HOME` (and
+    `XDG_CONFIG_HOME`) to take a test off the developer's machine, but
+    `os.UserConfigDir`/`os.UserHomeDir` ignore `HOME` on Windows (they read
+    `%AppData%`/`%USERPROFILE%`), so `TestAMissingConfigFileIsSilent` is not
+    actually isolated here and picked up a real, unrelated
+    `%AppData%\herdr-auto-title\config.env` left on this machine
+    (`HERDR_AUTO_TITLE_POL_MS=800` — note the typo'd key — plus an unrelated
+    `SOMETHING_ELSE=1`), reading `Poll` back as the file's stale
+    `DefaultPoll`-overriding value instead of the true default.
+  - Fixing either needs touching test fixtures/helpers across both packages,
+    which is a separate, larger change from the named-pipe transport swap
+    this branch is scoped to — left as-is and flagged here rather than
+    silently worked around.
+  - **This is not a new discovery.** `7ede4ae` ("build: stop claiming
+    Windows") is `platforms` losing `windows` the first time, after a
+    since-removed Windows CI job hit this exact `filepath.IsAbs` failure and
+    the maintainer reverted the claim rather than paper over it. That commit
+    also records that the socket layer passed on Windows even then — AF_UNIX
+    was never the obstacle — which matches this pass's finding that
+    `internal/herdr` is clean. What it does not settle is whether
+    `CWD.base`'s actual runtime logic is correct for genuine Windows paths
+    (it almost certainly is — `filepath.IsAbs("C:\Users\...")` is `true` on
+    Windows GOOS — the failing fixtures are simply unrealistic for
+    `GOOS=windows`, not proof the resolver is broken against real Windows
+    input) versus genuinely untested. No CI job re-proved this before
+    `platforms` regained `windows` in this change, and none exists to catch a
+    regression here going forward — re-adding the claim without also fixing
+    or re-verifying this is the same trade the earlier revert declined to
+    make. Worth the maintainer/user's explicit judgment call before treating
+    this branch as done, not just this file's say-so.
+
 ## Herdr socket API — verified facts
 
 The originating specification is wrong on several protocol details. These were
